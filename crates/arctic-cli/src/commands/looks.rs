@@ -1,5 +1,5 @@
 //! `arctic skin …` (the Minecraft skin and capes Mojang shows everyone) and
-//! `arctic look …` (the Arctic look: skin, cape and cosmetics other Arctic
+//! `arctic look …` (the RICO look: skin, cape and cosmetics other RICO
 //! players see).
 
 use std::path::Path;

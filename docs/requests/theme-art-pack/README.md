@@ -1,12 +1,12 @@
 # Theme art pack: brief for an image model
 
-Arctic's menus and the launcher need real artwork instead of the procedural gradients they
+RICO's menus and the launcher need real artwork instead of the procedural gradients they
 draw now. This file is the exact brief: what to make, the file names and sizes the renderer
 will expect, and the animation each layer supports.
 Design background: [`docs/design/ui-redesign-2026-10.md`](../../design/ui-redesign-2026-10.md), section 3.
 
 ## Style
-- Calm, cold, atmospheric. Arctic night, northern lights, snow, ice, distant mountains.
+- Calm, cold, atmospheric. RICO night, northern lights, snow, ice, distant mountains.
 - Painterly or soft 3D, not pixel art, not photoreal. Wide, quiet, with an empty centre
   (menus sit on top of it) and the detail near the top and bottom edges.
 - No text, no logos, no characters, no UI.

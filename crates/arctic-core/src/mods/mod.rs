@@ -173,7 +173,7 @@ pub struct InstalledMod {
     pub dependency: bool,
 }
 
-/// A jar in the mods folder, tracked (installed via Arctic) or not.
+/// A jar in the mods folder, tracked (installed via RICO) or not.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModFile {
     /// File name without the `.disabled` suffix.
@@ -289,7 +289,7 @@ pub fn updates_waiting(
     Ok(Some(!plan.iter().all(have)))
 }
 
-/// A newer build of a mod Arctic installed into an instance.
+/// A newer build of a mod RICO installed into an instance.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModUpdate {
     pub project_id: String,
@@ -301,7 +301,7 @@ pub struct ModUpdate {
     pub latest: String,
 }
 
-/// The mods installed through Arctic (and switched on) that have a newer build for this game
+/// The mods installed through RICO (and switched on) that have a newer build for this game
 /// version and loader. Asks Modrinth about each mod side by side; mods it can't answer for are left
 /// out. Switched-off mods and mods the player added by hand are not looked at.
 pub fn available_updates(

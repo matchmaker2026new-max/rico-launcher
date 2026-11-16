@@ -434,7 +434,7 @@ fn branded_java(java: &Path) -> PathBuf {
 /// (A junction isn't enough: recorders see the path it leads to.)
 #[cfg(windows)]
 fn in_named_folder(exe: &Path) -> PathBuf {
-    const NAME: &str = "Arctic Client";
+    const NAME: &str = "RICO Client";
     let named = (|| {
         let bin = exe.parent()?;
         let runtime = bin.parent()?;
@@ -633,7 +633,7 @@ mod tests {
     #[test]
     fn portal_folders_are_recognized() {
         assert!(is_portal_path(Path::new(
-            "/run/user/1000/doc/AbC/Minecraft/Arctic Launcher"
+            "/run/user/1000/doc/AbC/Minecraft/RICO Launcher"
         )));
         assert!(!is_portal_path(Path::new("/run/user/1000/gvfs/x")));
         assert!(!is_portal_path(Path::new("/home/u/.var/app/doc/x")));

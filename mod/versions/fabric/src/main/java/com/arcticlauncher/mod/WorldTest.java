@@ -832,7 +832,7 @@ final class WorldTest {
 		}), 2300, TimeUnit.MILLISECONDS);
 	}
 
-	/** Save outside Minecraft's screenshots folder so Arctic's screenshot notice stays out of later frames. */
+	/** Save outside Minecraft's screenshots folder so RICO's screenshot notice stays out of later frames. */
 	private static void cosmeticShot(String name) {
 		//#if MC >= 26.2
 		Minecraft mc = Minecraft.getInstance();

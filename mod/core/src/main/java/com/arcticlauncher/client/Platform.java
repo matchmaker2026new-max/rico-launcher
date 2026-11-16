@@ -265,7 +265,7 @@ public interface Platform extends com.arcticlauncher.client.controller.GamepadHo
 	 */
 	void registerTexture(String hash, byte[] png, boolean cape);
 
-	/** Mojang session join, to prove who we are to the Arctic server. */
+	/** Mojang session join, to prove who we are to the RICO server. */
 	void joinServer(String serverId) throws Exception;
 
 	/** What you're aiming at: 0 nothing, 1 a player, 2 a hostile mob, 3 another creature. */
@@ -575,7 +575,7 @@ public interface Platform extends com.arcticlauncher.client.controller.GamepadHo
 		return true;
 	}
 
-	/** Another zoom on the game (OptiFine's) shares the zoom key with Arctic's: switch it off. True when it was found and changed. */
+	/** Another zoom on the game (OptiFine's) shares the zoom key with RICO's: switch it off. True when it was found and changed. */
 	default boolean disableOtherZoom() {
 		return false;
 	}
@@ -641,7 +641,7 @@ public interface Platform extends com.arcticlauncher.client.controller.GamepadHo
 
 	/**
 	 * The resource packs you have: turned-on ones first (top pack first),
-	 * then the rest. Arctic's own hidden packs aren't listed. Game thread.
+	 * then the rest. RICO's own hidden packs aren't listed. Game thread.
 	 */
 	default java.util.List<com.arcticlauncher.client.packs.PackInfo> resourcePacks() {
 		return java.util.Collections.emptyList();

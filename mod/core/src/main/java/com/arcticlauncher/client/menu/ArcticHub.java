@@ -46,7 +46,7 @@ final class ArcticHub extends Page {
 		return ModCatalog.newCount();
 	}
 
-	/** The count shown on the Arctic button: unread chat plus new features. */
+	/** The count shown on the RICO button: unread chat plus new features. */
 	public static int badge() {
 		return unreadChat() + newFeatures();
 	}

@@ -1,7 +1,7 @@
 //! An instance's saved servers (Minecraft's `servers.dat`) and their live
 //! status: who's online, the MOTD, version and ping, so you can see if
 //! friends are on before starting the game. The pinging itself is
-//! `arctic-ping`, shared with the Arctic server.
+//! `arctic-ping`, shared with the RICO server.
 
 mod nbt;
 pub mod public;

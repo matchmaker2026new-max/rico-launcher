@@ -415,7 +415,7 @@ impl ArcticApp {
         });
     }
 
-    /// Toggle for Arctic's companion mod (Fabric and Quilt only).
+    /// Toggle for RICO's companion mod (Fabric and Quilt only).
     fn arctic_mod_card(&mut self, ui: &mut egui::Ui, instance: &Instance) {
         use arctic_core::arctic_mod;
         use arctic_core::loaders::LoaderKind;
@@ -442,7 +442,7 @@ impl ArcticApp {
             Some(LoaderKind::Fabric | LoaderKind::Quilt)
         );
         let vanilla = instance.loader.kind().is_none();
-        // Forge has the Arctic mod too where there's a Forge build (1.8.9).
+        // Forge has the RICO mod too where there's a Forge build (1.8.9).
         let forge_like = matches!(instance.loader.kind(), Some(LoaderKind::Forge))
             && instance
                 .version

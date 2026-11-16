@@ -9,7 +9,7 @@ import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
 /**
- * Arctic Client on Forge 1.8.9: Forge loads this as the mod, and it starts the same client the Legacy
+ * RICO Client on Forge 1.8.9: Forge loads this as the mod, and it starts the same client the Legacy
  * Fabric build starts (mod/forge/build_forge.py remaps the whole jar to Forge's names).
  *
  * Forge draws the in-game HUD with its own GuiIngameForge, which replaces the game's renderGameOverlay
@@ -25,7 +25,7 @@ public final class ArcticForge {
 		MinecraftForge.EVENT_BUS.register(this);
 	}
 
-	/** Arctic's own crosshair replaces the game's when it is on. */
+	/** RICO's own crosshair replaces the game's when it is on. */
 	@SubscribeEvent
 	public void overlayPre(RenderGameOverlayEvent.Pre event) {
 		if (event.type == RenderGameOverlayEvent.ElementType.CROSSHAIRS && LegacyHooks.ownCrosshair()) {

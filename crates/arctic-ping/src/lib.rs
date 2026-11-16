@@ -1,7 +1,7 @@
 //! Minecraft's server list ping, as the game does it: addresses with SRV
 //! redirects, the status handshake and a round-trip ping, optionally through
 //! a SOCKS5 proxy; plus a login probe that tells premium (online-mode)
-//! servers from cracked ones. Shared by the launcher and the Arctic server.
+//! servers from cracked ones. Shared by the launcher and the RICO server.
 
 mod address;
 mod bedrock;

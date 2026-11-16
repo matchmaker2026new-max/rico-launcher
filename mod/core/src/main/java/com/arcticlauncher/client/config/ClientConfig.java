@@ -11,18 +11,18 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/** Arctic Client settings, in {@code config/arctic.json}. */
+/** RICO Client settings, in {@code config/arctic.json}. */
 public final class ClientConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final int HUD_VERSION = 2;
 
-	/** Show Arctic looks (skins and capes) at all. */
+	/** Show RICO looks (skins and capes) at all. */
 	public boolean showCosmetics = true;
 	/** Animated capes stay on their first frame on your screen (everyone's, not just yours). */
 	public boolean reduceCapeMotion;
 	/** Ids of animated preset capes you turned "Animate" off for (their still image is worn). */
 	public Set<String> capeStill = new HashSet<String>();
-	/** Players whose Arctic look you chose to hide (UUID strings). */
+	/** Players whose RICO look you chose to hide (UUID strings). */
 	public Set<String> hiddenPlayers = new HashSet<String>();
 	/** Menu style id (see {@code Style}). */
 	public String style = "arctic";
@@ -132,7 +132,7 @@ public final class ClientConfig {
 	public boolean emojiButton = true;
 	/** Your own name tag shows above your head in third person (the game leaves it out). */
 	public boolean ownNametag = true;
-	/** Players with an OptiFine cape (and none of Arctic's) show it, without OptiFine. */
+	/** Players with an OptiFine cape (and none of RICO's) show it, without OptiFine. */
 	public boolean optifineCapes = true;
 	/** The ping in milliseconds after each name in the player list. */
 	public boolean tabPing = true;
@@ -153,7 +153,7 @@ public final class ClientConfig {
 	public boolean tntTimer;
 	/** Screens (inventory, chat, menus) stay open while standing in a nether portal. */
 	public boolean portalScreens = true;
-	/** The Arctic badge in front of Arctic players' name tags too (it is always in the player list). */
+	/** The RICO badge in front of RICO players' name tags too (it is always in the player list). */
 	public boolean badgeNametags = true;
 	/** Where the badge shows: 0 the player list and name tags, 1 the player list only, 2 name tags only. */
 	public int badgeWhere;
@@ -163,7 +163,7 @@ public final class ClientConfig {
 	public boolean fovNoSpeed;
 	/** Dynamic FOV: drawing a bow no longer narrows the view. */
 	public boolean fovNoBow;
-	/** The Arctic watermark: corner (0 bottom left, 1 bottom right, 2 top left, 3 top right), size (index into Watermark.SIZES), opacity (0 faint to 2 strong), and the version after it. */
+	/** The RICO watermark: corner (0 bottom left, 1 bottom right, 2 top left, 3 top right), size (index into Watermark.SIZES), opacity (0 faint to 2 strong), and the version after it. */
 	public boolean shinyPots;
 	/** Team View: players on your scoreboard team are outlined through walls. */
 	public boolean teamView;
@@ -173,7 +173,7 @@ public final class ClientConfig {
 	public int watermarkSize = 1;
 	public int watermarkOpacity;
 	public boolean watermarkVersion;
-	/** "ARCTIC" beside the snowflake, and the color of that text (ARGB; the opacity setting applies on top). */
+	/** "RICO" beside the snowflake, and the color of that text (ARGB; the opacity setting applies on top). */
 	public boolean watermarkName;
 	public int watermarkColor = 0xFFFFFFFF;
 	/** 1.8.9 - 1.12.2: vertex buffers were switched on once (they're off in Minecraft's defaults). */
@@ -218,7 +218,7 @@ public final class ClientConfig {
 	public boolean tabGlowSelf;
 	/** Playing with a game controller. */
 	public com.arcticlauncher.client.controller.Controller.Settings controller = new com.arcticlauncher.client.controller.Controller.Settings();
-	/** SOCKS5 proxy for server connections and Arctic's web requests. */
+	/** SOCKS5 proxy for server connections and RICO's web requests. */
 	public ProxyConfig proxy = new ProxyConfig();
 	/** When the launcher's proxy choice was last applied (its timestamp). */
 	public long proxyFromLauncher;
@@ -243,7 +243,7 @@ public final class ClientConfig {
 	public boolean chatStampItalic;
 	/** Keep the chat lines when you disconnect or change server. */
 	public boolean chatKeep;
-	/** While you host a world in Arctic Launcher's play together, the world you're in opens to LAN by itself. */
+	/** While you host a world in RICO Launcher's play together, the world you're in opens to LAN by itself. */
 	public boolean lanAuto = true;
 	/** Brackets around the crosshair while a creature is within hit reach. */
 	public boolean rangeIndicator;

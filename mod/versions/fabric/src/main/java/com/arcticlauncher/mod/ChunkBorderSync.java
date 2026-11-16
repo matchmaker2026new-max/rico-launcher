@@ -7,7 +7,7 @@ import net.minecraft.client.renderer.debug.DebugRenderer;
 //#endif
 
 /**
- * The Chunk Borders mod before Minecraft 1.21.9: the game's own F3+G is switched on while Arctic's switch is on, and
+ * The Chunk Borders mod before Minecraft 1.21.9: the game's own F3+G is switched on while RICO's switch is on, and
  * back off when it is turned off (only if this switched it on, so the player's own F3+G stays theirs). From 1.21.9
  * the debug entry list says so instead (see DebugEntriesMixin).
  */

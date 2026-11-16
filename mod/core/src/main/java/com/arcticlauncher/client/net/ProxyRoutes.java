@@ -21,7 +21,7 @@ public final class ProxyRoutes {
 
 	private ProxyRoutes() {}
 
-	/** New settings from Arctic (null = off). */
+	/** New settings from RICO (null = off). */
 	public static void set(ProxyConfig p) {
 		proxy = p == null ? null : p.copy();
 		installLogin(proxy);
@@ -169,7 +169,7 @@ public final class ProxyRoutes {
 	}
 
 	/**
-	 * Java's own SOCKS client (Minecraft's web services, Arctic's requests)
+	 * Java's own SOCKS client (Minecraft's web services, RICO's requests)
 	 * asks an {@link Authenticator} for the login; answer only for the proxy.
 	 */
 	private static void installLogin(final ProxyConfig p) {

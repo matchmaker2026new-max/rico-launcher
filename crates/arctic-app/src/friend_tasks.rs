@@ -1,5 +1,5 @@
 //! Background jobs for friends: refresh the profile and friend list (which
-//! also tells the Arctic server the launcher is open), and each action.
+//! also tells the RICO server the launcher is open), and each action.
 
 use arctic_core::auth::Account;
 use arctic_core::friends::{self, InviteTo, Overview, Profile, Settings};

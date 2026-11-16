@@ -1,4 +1,4 @@
-//! Settings → crate::i18n::current("Voice chat"): proximity voice with other Arctic players on
+//! Settings → crate::i18n::current("Voice chat"): proximity voice with other RICO players on
 //! the same server. Off until turned on.
 
 use eframe::egui::{self, RichText};
@@ -16,9 +16,9 @@ impl ArcticApp {
     pub(crate) fn voice_section(&mut self, ui: &mut egui::Ui, p: &Palette) {
         ui.label(
             RichText::new(
-                "Talk with other Arctic players near you on the same server: voices get quieter \
+                "Talk with other RICO players near you on the same server: voices get quieter \
                  with distance and come from where the player stands. Audio goes directly between \
-                 players; the Arctic server only tells launchers who else is on that server.",
+                 players; the RICO server only tells launchers who else is on that server.",
             )
             .small()
             .color(p.muted),
@@ -48,7 +48,7 @@ impl ArcticApp {
         if v.push_to_talk {
             ui.label(
                 RichText::new(crate::i18n::current(
-                    "Hold V in game to talk (change it in the Arctic menu → Voice).",
+                    "Hold V in game to talk (change it in the RICO menu → Voice).",
                 ))
                 .small()
                 .color(p.muted),

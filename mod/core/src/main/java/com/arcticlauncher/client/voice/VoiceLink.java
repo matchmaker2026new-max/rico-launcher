@@ -18,7 +18,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 /**
- * The game's half of proximity voice chat. Voice itself runs in Arctic
+ * The game's half of proximity voice chat. Voice itself runs in RICO
  * Launcher; the game tells it (through the launcher's local bridge, ten
  * times a second) which server you're on, where you and the players around
  * you are, and whether the push-to-talk key is held. The answer says who's
@@ -72,7 +72,7 @@ public final class VoiceLink {
 		public final boolean speaking;
 		/** Close enough to hear (their position is known). */
 		public final boolean near;
-		/** Heard through Simple Voice Chat (not an Arctic player). */
+		/** Heard through Simple Voice Chat (not an RICO player). */
 		public final boolean svc;
 
 		Member(JsonObject o) {

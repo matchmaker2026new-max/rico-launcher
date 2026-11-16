@@ -649,7 +649,7 @@ final class FabricPlatform implements Platform {
 			Compat.setScreen(new net.minecraft.client.gui.screens.TitleScreen());
 			return;
 		}
-		// One Arctic page replaces another, so Escape goes back to what was
+		// One RICO page replaces another, so Escape goes back to what was
 		// under the menu instead of through every page visited.
 		Screen now = Compat.screen();
 		Screen under = now instanceof PageScreen ? ((PageScreen) now).parent() : now;

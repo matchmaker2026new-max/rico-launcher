@@ -35,7 +35,7 @@ const FAST: &[(&str, &str)] = &[
     ("Sprint", "movement"),
 ];
 
-/// HUD modules Arctic has no widget for (named when they're on).
+/// HUD modules RICO has no widget for (named when they're on).
 const OTHER_HUD: &[(&str, &str)] = &[
     ("ArrayList", "Array List"),
     ("ScoreboardMod", "Scoreboard"),
@@ -196,7 +196,7 @@ fn is_on(m: &Value) -> bool {
 }
 
 /// Where the module sits, or `None` for "arranged automatically": on its default position it follows
-/// Fast Client's own layout, which Arctic arranges alike.
+/// Fast Client's own layout, which RICO arranges alike.
 fn place(m: &Value, display: (f64, f64), gui: (f64, f64)) -> Option<Anchor> {
     if m.get("defaultHudPosition").and_then(Value::as_bool) != Some(false) {
         return None;

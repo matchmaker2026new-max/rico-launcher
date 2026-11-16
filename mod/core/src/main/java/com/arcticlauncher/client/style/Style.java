@@ -1,7 +1,7 @@
 package com.arcticlauncher.client.style;
 
 /**
- * A menu style: the palette for Arctic screens and restyled vanilla
+ * A menu style: the palette for RICO screens and restyled vanilla
  * widgets. {@link #VANILLA} keeps Minecraft's own menus.
  */
 public final class Style {

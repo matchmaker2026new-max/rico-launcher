@@ -3,7 +3,7 @@ package com.arcticlauncher.mod;
 /**
  * Polarium (the crowd performance mod) makes other players' render states
  * in full once a tick and only brings them up to the frame between; it calls
- * this after each bringing up, for Arctic's own per-frame work on them: the
+ * this after each bringing up, for RICO's own per-frame work on them: the
  * speaker on a talking player's name tag. A plain JDK interface, so neither
  * mod depends on the other.
  */

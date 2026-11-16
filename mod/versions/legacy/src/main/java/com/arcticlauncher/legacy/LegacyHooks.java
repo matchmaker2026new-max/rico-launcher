@@ -215,7 +215,7 @@ public final class LegacyHooks {
 
 	private static boolean titled;
 
-	/** The window's title names Arctic, once (LWJGL 2 sets it before any mod runs). */
+	/** The window's title names RICO, once (LWJGL 2 sets it before any mod runs). */
 	private static void titleWindow() {
 		titled = true;
 		if (System.getProperty("arctic.launcher") != null) {
@@ -316,7 +316,7 @@ public final class LegacyHooks {
 		com.arcticlauncher.client.feature.ContainerPeek.hover(new LegacyGfx(), mouseX, mouseY, slot.getStack());
 	}
 
-	/** The Arctic badge in the {@code size}-wide blank at ({@code x}, {@code y}), with the text's own transparency. */
+	/** The RICO badge in the {@code size}-wide blank at ({@code x}, {@code y}), with the text's own transparency. */
 	public static void drawBadge(float x, float y, int size, int argb) {
 		net.minecraft.util.Identifier texture = LegacyTextures.resolve("asset:badge");
 		if (texture == null) {
@@ -379,7 +379,7 @@ public final class LegacyHooks {
 		return c != null && p != null && com.arcticlauncher.client.feature.SlotLocks.drop(c, p.inventory.selectedSlot);
 	}
 
-	/** Arctic draws the crosshair (the game's is hidden). */
+	/** RICO draws the crosshair (the game's is hidden). */
 	public static boolean ownCrosshair() {
 		ClientConfig c = ArcticClient.config();
 		return c != null && c.crosshair.enabled;
@@ -483,7 +483,7 @@ public final class LegacyHooks {
 		return player.getCapeId();
 	}
 
-	/** An Arctic look texture once it's uploaded, or null. */
+	/** An RICO look texture once it's uploaded, or null. */
 	public static Identifier ready(String hash) {
 		// Only once uploaded: before that Minecraft looks for it in the resource packs and fails the draw.
 		return ArcticClient.looks().texture(hash) ? LegacyTextures.resolve("look:" + ArcticClient.looks().frame(hash)) : null;

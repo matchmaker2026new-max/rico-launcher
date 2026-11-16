@@ -22,7 +22,7 @@ const MAX_LIMIT: usize = 100;
 /// contact information: <https://docs.modrinth.com/api/#user-agents>.
 pub(super) fn user_agent() -> String {
     format!(
-        "brksfrb/{}/{} (arcticlauncher.com)",
+        "brksfrb/{}/{} (github.com/matchmaker2026new-max/rico-launcher)",
         crate::LAUNCHER_BRAND,
         crate::APP_VERSION
     )

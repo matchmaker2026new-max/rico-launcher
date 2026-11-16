@@ -1,4 +1,4 @@
-# Request: play the reviewed expressive emotes in Arctic
+# Request: play the reviewed expressive emotes in RICO
 
 **Status (2026-10-12): implemented; full visual verification remains.** All 17 studies are live emotes (new ids, the old wave/bow/clap/facepalm
 kept). `crates/arctic-cosmetics/assets/tools/import_emote_specs.py` converts a study into a game emote;
@@ -18,7 +18,7 @@ The expressive rig now supports parented torso motion, a separate chest and pelv
 1. Define an optional expressive player rig for selected emotes: root, pelvis, chest, head, upper/lower arms, and upper/lower legs. Preserve Minecraft's block proportions and correctly map both base skin and outer layers across the extra segments. Standard six-part animations must keep working.
 2. Support authored parent-child transforms and render-only root yaw and position. Root motion must not move the gameplay entity, hitbox, or camera. The head and arms should inherit torso movement so hand-to-head and hand-to-chest contacts stay aligned. Support planted feet or equivalent authored foot targets for crouches and seated poses.
 3. Support one-shot clips with a deliberate return to idle, plus an optional intro/loop/outro sequence for repeating emotes. Twerk's preview contains a short repeating beat inside the longer review video; treating the whole review video as one seamless loop would visibly turn the player around on every repetition. Preserve sharp impacts and short holds where authored instead of smoothing every keyframe.
-4. Sample the same clip time locally and for other Arctic players, with an immediate, clean interruption when the player starts moving or the emote is stopped. Keep the current server/presence safeguards. Offer sensible reduced-motion behavior for looping emotes.
+4. Sample the same clip time locally and for other RICO players, with an immediate, clean interruption when the player starts moving or the emote is stopped. Keep the current server/presence safeguards. Offer sensible reduced-motion behavior for looping emotes.
 5. Retarget each approved prototype into a versioned runtime asset with validated duration, joint names, key count, finite transforms, bounded offsets, and an idle/rest pose. Avoid shipping MP4s as runtime content. Verify on supported Minecraft versions and classic/slim player models from front, back, three-quarter, and side views before adding catalog entries.
 
 The wheel now has pages; favorites remain an optional usability improvement. Keep these emotes free, consistent with the content pack decision.

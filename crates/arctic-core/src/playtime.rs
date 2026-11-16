@@ -3,7 +3,7 @@
 //! `meta/playtime.json`.
 //!
 //! Two sources: the launcher times each game from its start to its exit (the instance's total and
-//! session count), and the Arctic Client writes the stretches spent in a server, a world or the menus
+//! session count), and the RICO Client writes the stretches spent in a server, a world or the menus
 //! to `arctic-playtime.jsonl` in the game folder, which is read and cleared when the game closes.
 
 use std::collections::BTreeMap;

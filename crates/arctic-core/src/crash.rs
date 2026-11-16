@@ -660,7 +660,7 @@ const REPORT_LAUNCHER_BYTES: usize = 6 * 1024;
 impl Report {
     /// `lines` is the game's log, `launcher_lines` the launcher's own log, `crash_report` the file
     /// Minecraft wrote (if it did), `java` how Java was started (see `LaunchPlan::java_summary`).
-    /// `title` is what Arctic made of it, or empty.
+    /// `title` is what RICO made of it, or empty.
     pub fn build(
         game: &str,
         loader: &str,

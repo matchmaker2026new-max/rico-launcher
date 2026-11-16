@@ -64,7 +64,7 @@ public final class TitleCompatTest {
 			visit(steps, "com.moulberry.flashback.screen.select_replay.SelectReplayScreen", "com.moulberry.flashback.screen.FlashbackButton");
 		}
 		steps.add(() -> {
-			// Exercise Arctic's own return-to-title path as well as Minecraft's setScreen path.
+			// Exercise RICO's own return-to-title path as well as Minecraft's setScreen path.
 			ArcticClient.platform().openPage(ArcticClient.titleMenu());
 		});
 		steps.add(() -> {
@@ -82,7 +82,7 @@ public final class TitleCompatTest {
 			assertServers();
 			SelfTest.shot("servers-default");
 			roundTripArcticMenu();
-			assertServers(); // Must already be Arctic, before another tick could hide a native-screen flash.
+			assertServers(); // Must already be RICO, before another tick could hide a native-screen flash.
 			ArcticMod.LOG.info("titlecompat: Right Shift then Escape immediately restores RICO servers");
 			selectVanilla();
 		});

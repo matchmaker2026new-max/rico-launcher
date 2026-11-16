@@ -163,7 +163,7 @@ pub struct ArcticApp {
     pub(crate) remove_confirm: Option<String>,
     /// Instance whose performance mods are about to be turned off (asks first).
     pub(crate) performance_off_confirm: Option<String>,
-    /// Instance whose Arctic Client (or Arctic mod) is about to be turned off (asks first).
+    /// Instance whose RICO Client (or RICO mod) is about to be turned off (asks first).
     pub(crate) client_off_confirm: Option<String>,
     /// The suggest-a-feature form, while it's open.
     pub(crate) suggest: Option<crate::ui::suggest::SuggestForm>,
@@ -638,7 +638,7 @@ impl ArcticApp {
     }
 
     /// The Join button of a server. A running game is brought to the front and told to connect (the
-    /// Arctic Client listens for that); without a running game, the player is asked (once, if they
+    /// RICO Client listens for that); without a running game, the player is asked (once, if they
     /// like) before Minecraft starts. Returns false while that question is up.
     pub(crate) fn join_server(&mut self, address: &str) -> bool {
         use crate::toasts::Kind;
@@ -665,7 +665,7 @@ impl ArcticApp {
                         address.to_owned(),
                     );
                 } else {
-                    // No Arctic Client in that game: nothing can tell it to switch servers.
+                    // No RICO Client in that game: nothing can tell it to switch servers.
                     let copied = arboard::Clipboard::new()
                         .and_then(|mut c| c.set_text(address.to_owned()))
                         .is_ok();
@@ -966,7 +966,7 @@ impl ArcticApp {
         }
     }
 
-    /// The first time the window is closed: keep Arctic in the tray, or quit?
+    /// The first time the window is closed: keep RICO in the tray, or quit?
     pub(crate) fn close_prompt_dialog(&mut self, ctx: &egui::Context) {
         if !self.close_prompt {
             return;
@@ -1110,7 +1110,7 @@ impl ArcticApp {
                         if let Some(warning) = run.memory_warning() {
                             run.push_log([arctic_core::launch::logparse::LogLine {
                                 level: arctic_core::launch::logparse::Level::Warn,
-                                text: format!("──── Arctic: {warning} ────"),
+                                text: format!("──── RICO: {warning} ────"),
                             }]);
                             let title = run.title.clone();
                             self.toasts.push(

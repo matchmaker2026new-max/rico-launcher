@@ -1,4 +1,4 @@
-//! crate::i18n::current("Suggest a feature or report a bug"): a short form that goes to the Arctic team,
+//! crate::i18n::current("Suggest a feature or report a bug"): a short form that goes to the RICO team,
 //! with an optional launcher / game log attached (cleaned of names and tokens first).
 
 use arctic_core::cosmetics::Suggestion;

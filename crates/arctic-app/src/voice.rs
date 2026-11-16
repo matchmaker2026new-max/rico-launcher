@@ -1,7 +1,7 @@
 //! Proximity voice chat in the launcher. The game reports (through the
 //! bridge, several times a second) which server it's on, where you are and
 //! where the players around you are; this joins that server's voice room
-//! on the Arctic server, connects directly to the other members, sends
+//! on the RICO server, connects directly to the other members, sends
 //! your voice and plays theirs placed by position. Nothing runs until voice
 //! chat is on and you're on a server; it stops when the game goes quiet.
 

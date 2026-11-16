@@ -1,4 +1,4 @@
-//! What a profile's instances share: the server list, the Arctic Client's
+//! What a profile's instances share: the server list, the RICO Client's
 //! settings (HUD, crosshair, keys, waypoints) and Minecraft's settings
 //! (keys, video, sound...). Kept in step whenever a game starts and after
 //! it quits: the newest copy wins and goes to every other instance.
@@ -20,7 +20,7 @@ use crate::{Error, Result};
 
 /// Where the shared copies live, in the profile's folder.
 const DIR: &str = "shared";
-/// Arctic Client files shared as they are (paths in the game folder).
+/// RICO Client files shared as they are (paths in the game folder).
 const CLIENT_FILES: [&str; 3] = [
     "config/arctic.json",
     "config/arctic-crosshair.png",
@@ -36,7 +36,7 @@ const BACKUP: &str = ".before-sharing";
 pub struct SharedSettings {
     /// The multiplayer server list.
     pub servers: bool,
-    /// Arctic Client: HUD, crosshair, keys, looks settings, waypoints.
+    /// RICO Client: HUD, crosshair, keys, looks settings, waypoints.
     pub client: bool,
     /// Minecraft's own settings: keys, video, sound, FOV...
     pub game: bool,

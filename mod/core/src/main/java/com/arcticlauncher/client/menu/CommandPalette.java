@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Ctrl+K: one search box for everything: Arctic's mods and their settings, your saved servers, your
+ * Ctrl+K: one search box for everything: RICO's mods and their settings, your saved servers, your
  * friends and a few actions. Type, pick with the arrow keys or the mouse, Enter opens it.
  */
 public final class CommandPalette extends Page {

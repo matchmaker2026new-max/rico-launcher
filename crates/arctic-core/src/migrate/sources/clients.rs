@@ -1,6 +1,6 @@
 //! PvP clients: their own mods for each version (LabyMod, Lunar, Feather)
 //! and their HUD setups (LabyMod, Lunar, Badlion, Feather). The clients
-//! themselves aren't carried over; the Arctic Client takes their place.
+//! themselves aren't carried over; the RICO Client takes their place.
 
 use std::path::{Path, PathBuf};
 

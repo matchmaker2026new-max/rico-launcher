@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** The pause menu: an Arctic button, and leaving takes a second click (when that's on). */
+/** The pause menu: an RICO button, and leaving takes a second click (when that's on). */
 @Mixin(GameMenuScreen.class)
 abstract class GameMenuScreenMixin extends Screen {
 	private static final int ARCTIC_ID = 950;

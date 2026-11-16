@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/** Shows the player's Arctic look: skin (with arm model) and cape/elytra. */
+/** Shows the player's RICO look: skin (with arm model) and cape/elytra. */
 @Mixin(AbstractClientPlayer.class)
 abstract class AbstractClientPlayerMixin {
 	/** Which default skin streamer mode shows (always the same one). */

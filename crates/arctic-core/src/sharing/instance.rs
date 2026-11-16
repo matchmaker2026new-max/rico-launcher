@@ -51,7 +51,7 @@ pub struct InstancePack {
     pub max_memory_mb: Option<u32>,
     #[serde(default)]
     pub mods: Vec<SharedMod>,
-    /// Arctic Client settings; profiles only.
+    /// RICO Client settings; profiles only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client: Option<serde_json::Value>,
 }
@@ -256,7 +256,7 @@ impl InstancePack {
     }
 }
 
-/// A Fabric Loader older than the Arctic Client needs gets the one it needs.
+/// A Fabric Loader older than the RICO Client needs gets the one it needs.
 fn arctic_ready(dirs: &DataDirs, loader: &Loader, game: &str) -> Loader {
     match loader {
         Loader::Fabric { version } if !crate::arctic_mod::loader_fits(game, version) => {

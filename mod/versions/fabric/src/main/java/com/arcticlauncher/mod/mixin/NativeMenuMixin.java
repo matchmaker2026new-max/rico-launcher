@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Add Arctic actions to the original screen; never replace or remove a widget owned by another mod. */
+/** Add RICO actions to the original screen; never replace or remove a widget owned by another mod. */
 @Mixin({TitleScreen.class, JoinMultiplayerScreen.class, DisconnectedScreen.class})
 abstract class NativeMenuMixin extends Screen {
 	//#if MC >= 1.14

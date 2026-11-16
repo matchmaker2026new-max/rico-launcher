@@ -1,10 +1,10 @@
 # RICO Flatpak distribution
 
-The existing `brksfrb/arctic-launcher` repository owns both the source and the
+The existing `matchmaker2026new-max/rico-launcher` repository owns both the source and the
 signed Flatpak feed, served by its GitHub Pages site. No separate source repository
 or Flathub app submission is needed. Flathub supplies the Freedesktop runtime only.
 
-Install: https://brksfrb.github.io/arctic-launcher/arctic.flatpakref
+Install: https://brksfrb.github.io/rico-launcher/arctic.flatpakref
 
 Opening this file in a Flatpak-capable software manager installs RICO and registers
 its update feed. Future stable releases appear in that software manager. Automatic

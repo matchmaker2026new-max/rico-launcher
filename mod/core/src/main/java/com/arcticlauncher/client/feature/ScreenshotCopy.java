@@ -14,7 +14,7 @@ import com.arcticlauncher.client.looks.Http;
 import com.google.gson.JsonObject;
 
 /**
- * Screenshots onto the clipboard as pictures. Arctic Launcher does it when the game was started from it;
+ * Screenshots onto the clipboard as pictures. RICO Launcher does it when the game was started from it;
  * otherwise the system's own tools do (the game runs Java without desktop access, so Java's clipboard
  * usually can't, but it's tried last).
  */

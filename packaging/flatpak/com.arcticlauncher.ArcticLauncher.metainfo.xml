@@ -16,9 +16,9 @@
     <p>RICO is not affiliated with Mojang Studios or Microsoft.</p>
   </description>
   <launchable type="desktop-id">com.arcticlauncher.ArcticLauncher.desktop</launchable>
-  <provides><binary>arctic-launcher</binary><binary>arctic</binary></provides>
-  <url type="homepage">https://arcticlauncher.com</url>
-  <url type="bugtracker">https://github.com/brksfrb/arctic-launcher/issues</url>
-  <url type="vcs-browser">https://github.com/brksfrb/arctic-launcher</url>
+  <provides><binary>rico-launcher</binary><binary>arctic</binary></provides>
+  <url type="homepage">https://github.com/matchmaker2026new-max/rico-launcher</url>
+  <url type="bugtracker">https://github.com/matchmaker2026new-max/rico-launcher/issues</url>
+  <url type="vcs-browser">https://github.com/matchmaker2026new-max/rico-launcher</url>
   <releases><release version="@VERSION@" date="@DATE@"/></releases>
 </component>

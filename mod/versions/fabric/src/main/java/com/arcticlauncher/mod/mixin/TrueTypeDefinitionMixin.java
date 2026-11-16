@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
 /**
  * Rasterizes the smooth font at the GUI scale instead of a fixed oversample,
  * so glyphs are drawn 1:1 on screen: no blur from upscaling, no uneven
- * strokes from shrinking. In Arctic's font files "oversample" is a multiple
+ * strokes from shrinking. In RICO's font files "oversample" is a multiple
  * of the GUI scale: 1 for chat text, 4 for titles (drawn 4× larger). The vertical shift is rounded to whole screen
  * pixels too, so FreeType's hinting (which lines stems up with pixels)
  * isn't undone by a fractional offset.

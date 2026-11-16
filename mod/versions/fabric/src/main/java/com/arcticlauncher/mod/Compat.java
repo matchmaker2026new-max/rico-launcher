@@ -119,7 +119,7 @@ public final class Compat {
 		//#endif
 	}
 
-	/** Whether text can show Arctic's badge glyph (it needs fonts in text, 1.16+). */
+	/** Whether text can show RICO's badge glyph (it needs fonts in text, 1.16+). */
 	//#if MC >= 1.16
 	public static final boolean BADGES = true;
 	//#else
@@ -373,7 +373,7 @@ public final class Compat {
 	/** F3 is on (the debug overlay is showing). */
 	public static boolean debugScreenShowing() {
 		//#if MC >= 1.21.11
-		// showDebugScreen() is also true while any debug entry is on (F3+B hitboxes, chunk borders, or Arctic's own
+		// showDebugScreen() is also true while any debug entry is on (F3+B hitboxes, chunk borders, or RICO's own
 		// switches for them), which would hide the HUD widgets: only the overlay itself counts.
 		return mc().debugEntries.isOverlayVisible();
 		//#else
@@ -513,7 +513,7 @@ public final class Compat {
 		//#endif
 	}
 
-	/** The Arctic snowflake as a text glyph (font {@code arctic:badge}). */
+	/** The RICO snowflake as a text glyph (font {@code arctic:badge}). */
 	public static net.minecraft.network.chat.MutableComponent arcticBadge() {
 		//#if MC < 1.16
 		// No custom fonts in text before 1.16: the snowflake character (smaller than the picture, but there).

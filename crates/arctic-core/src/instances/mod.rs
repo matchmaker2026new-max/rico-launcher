@@ -141,7 +141,7 @@ pub struct Instance {
     /// Icon shown for this instance; defaults to the loader's style.
     #[serde(default)]
     pub icon: InstanceIcon,
-    /// Install Arctic's companion mod (Fabric/Quilt, supported versions).
+    /// Install RICO's companion mod (Fabric/Quilt, supported versions).
     #[serde(default = "enabled")]
     pub arctic_mod: bool,
     /// Java executable for this instance (falls back to the launcher setting).

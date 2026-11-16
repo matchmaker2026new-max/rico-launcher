@@ -103,7 +103,7 @@ public final class FreezeWatchdog {
 			public void run() {
 				new Watch(client, dir).loop();
 			}
-		}, "Arctic freeze watchdog");
+		}, "RICO freeze watchdog");
 		t.setDaemon(true);
 		t.setPriority(Thread.NORM_PRIORITY + 1);
 		t.start();
@@ -196,7 +196,7 @@ public final class FreezeWatchdog {
 			if (sink != null) {
 				sink.accept(line);
 			} else {
-				System.err.println("[Arctic] " + line);
+				System.err.println("[RICO] " + line);
 			}
 		}
 
@@ -449,9 +449,9 @@ public final class FreezeWatchdog {
 		String summary() {
 			String top = best(tops);
 			String arctic = best(arcticFrames);
-			StringBuilder sb = new StringBuilder(String.format(java.util.Locale.ROOT, "Arctic: game froze for %.1fs", seconds(System.nanoTime()))); // i18n-ignore
+			StringBuilder sb = new StringBuilder(String.format(java.util.Locale.ROOT, "RICO: game froze for %.1fs", seconds(System.nanoTime()))); // i18n-ignore
 			sb.append(top == null ? ", no stack captured" : ", mostly in " + top); // i18n-ignore
-			if (arctic != null && !arctic.equals(top)) sb.append(" (Arctic code: ").append(arctic).append(')');
+			if (arctic != null && !arctic.equals(top)) sb.append(" (RICO code: ").append(arctic).append(')');
 			String tag = tag();
 			if (!tag.isEmpty()) sb.append(" [").append(tag).append(']');
 			return sb.toString();
@@ -502,7 +502,7 @@ public final class FreezeWatchdog {
 			for (Map.Entry<String, Integer> e : sorted(stacks)) {
 				sb.append("\n[").append(e.getValue()).append("x] stack ").append(++n).append('\n').append(e.getKey());
 			}
-			sb.append("\n== Recent Arctic feature activity before the freeze (oldest first) ==\n");
+			sb.append("\n== Recent RICO feature activity before the freeze (oldest first) ==\n");
 			sb.append(activity.isEmpty() ? "  (none recorded)\n" : activity); // i18n-ignore
 			sb.append("\n== All other threads (captured once, at the first sample) ==\n").append(others);
 			return sb.toString();

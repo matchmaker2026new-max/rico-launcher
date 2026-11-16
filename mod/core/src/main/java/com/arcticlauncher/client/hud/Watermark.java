@@ -5,7 +5,7 @@ import com.arcticlauncher.client.config.ClientConfig;
 import com.arcticlauncher.client.gfx.Gfx;
 import com.arcticlauncher.client.style.Style;
 
-/** A small, quiet Arctic snowflake in a corner of the screen (for screenshots and streams); the version after it if asked. */
+/** A small, quiet RICO snowflake in a corner of the screen (for screenshots and streams); the version after it if asked. */
 public final class Watermark extends HudWidget {
 	public static final String[] CORNERS = {"Bottom left", "Bottom right", "Top left", "Top right"};
 	public static final String[] OPACITIES = {"Faint", "Medium", "Strong"};
@@ -33,7 +33,7 @@ public final class Watermark extends HudWidget {
 		if (c == null) {
 			return "";
 		}
-		String name = c.watermarkName ? "ARCTIC" : "";
+		String name = c.watermarkName ? "RICO" : "";
 		String version = c.watermarkVersion ? version() : "";
 		return name.isEmpty() || version.isEmpty() ? name + version : name + " " + version;
 	}

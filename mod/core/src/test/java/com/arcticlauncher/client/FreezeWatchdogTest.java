@@ -55,7 +55,7 @@ class FreezeWatchdogTest {
 		assertTrue(text.contains("Thread.sleep"), text);
 		assertTrue(text.contains("test event 7"), text);
 		assertEquals(1, lines.size());
-		assertTrue(lines.get(0).startsWith("Arctic: game froze for "), lines.get(0));
+		assertTrue(lines.get(0).startsWith("RICO: game froze for "), lines.get(0));
 	}
 
 	@Test void blockedClientNamesTheLockAndOwnerWithItsFullStackAndMonitors() throws Exception {

@@ -1,5 +1,5 @@
 //! A whole profile in a bundle: launcher settings, instances (as mod
-//! lists) and each instance's Arctic Client settings. Never accounts,
+//! lists) and each instance's RICO Client settings. Never accounts,
 //! tokens, the proxy, Java paths or JVM flags.
 
 use serde::{Deserialize, Serialize};

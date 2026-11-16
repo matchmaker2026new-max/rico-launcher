@@ -1,4 +1,4 @@
-//! Arctic's companion mod (capes from Arctic and the in-game Arctic menu),
+//! RICO's companion mod (capes from RICO and the in-game RICO menu),
 //! bundled with the launcher and kept in sync in Fabric and Quilt instances.
 
 use std::collections::HashMap;
@@ -307,7 +307,7 @@ pub fn at_least(a: &str, b: &str) -> bool {
 /// How long a looked-up Fabric Loader version is used before asking again.
 const LOADER_RECHECK: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
 
-/// Fabric loader version for running the Arctic Client on `game`: the
+/// Fabric loader version for running the RICO Client on `game`: the
 /// newest stable build, remembered so launches also work offline.
 pub fn client_loader(dirs: &crate::storage::DataDirs, game: &str) -> Option<String> {
     let cache = dirs.meta().join("arctic-client-loader.json");

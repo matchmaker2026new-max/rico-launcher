@@ -1,7 +1,7 @@
-//! Copy an instance from another launcher into Arctic: a new instance (or
-//! Arctic's Vanilla one), then its files by category. Other launchers'
+//! Copy an instance from another launcher into RICO: a new instance (or
+//! RICO's Vanilla one), then its files by category. Other launchers'
 //! own files, caches and anything account-related are never copied, and
-//! nothing already in Arctic is overwritten.
+//! nothing already in RICO is overwritten.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -413,10 +413,10 @@ pub fn measure(found: &Found) -> Sizes {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Imported {
     pub instance: Instance,
-    /// A new instance (not Arctic's Vanilla one).
+    /// A new instance (not RICO's Vanilla one).
     pub created: bool,
     pub files: usize,
-    /// Files left alone because Arctic already had them.
+    /// Files left alone because RICO already had them.
     pub kept: usize,
     pub mods: usize,
     pub recognized: Option<Recognized>,
@@ -428,7 +428,7 @@ pub struct Imported {
     pub notes: Vec<String>,
 }
 
-/// Copy `found` into Arctic, taking only `categories`.
+/// Copy `found` into RICO, taking only `categories`.
 pub fn import(
     dirs: &DataDirs,
     found: &Found,
@@ -492,7 +492,7 @@ fn target(
     Ok((instance, true, notes))
 }
 
-/// A Fabric Loader too old for the Arctic Client is moved up to the one it
+/// A Fabric Loader too old for the RICO Client is moved up to the one it
 /// needs (newer Fabric Loaders keep running older mods).
 fn arctic_ready(
     dirs: &DataDirs,
@@ -660,7 +660,7 @@ fn fill(
     })
 }
 
-/// World folders whose name Arctic already uses get ` (2)`… instead.
+/// World folders whose name RICO already uses get ` (2)`… instead.
 fn world_renames(items: &[Item], game_dir: &Path) -> HashMap<String, String> {
     let mut out = HashMap::new();
     for item in items {

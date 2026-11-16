@@ -12,12 +12,12 @@ import com.arcticlauncher.client.style.Style;
 import com.arcticlauncher.client.ui.Page;
 
 /**
- * Arctic Client's entry point. Version adapters call {@link #init} once and
+ * RICO Client's entry point. Version adapters call {@link #init} once and
  * then forward game events here.
  */
 public final class ArcticClient {
-	public static final String DEFAULT_SERVER = "https://cosmetics.arcticlauncher.com";
-	/** Overrides the Arctic server (for development). */
+	public static final String DEFAULT_SERVER = "https://cosmetics.github.com/matchmaker2026new-max/rico-launcher";
+	/** Overrides the RICO server (for development). */
 	public static final String SERVER_PROPERTY = "arctic.cosmetics.url";
 
 	private static Platform platform;
@@ -115,7 +115,7 @@ public final class ArcticClient {
 		proxyChanged();
 	}
 
-	/** The proxy settings changed: apply them to Arctic's and the game's traffic. */
+	/** The proxy settings changed: apply them to RICO's and the game's traffic. */
 	public static void proxyChanged() {
 		com.arcticlauncher.client.looks.Http.useProxy(config.proxy.usable() ? config.proxy : null);
 		platform.proxyChanged(config.proxy.usable() ? config.proxy : null);
@@ -434,7 +434,7 @@ public final class ArcticClient {
 		hud.cps().click(button);
 	}
 
-	/** A key went down with no screen open; true if Arctic used it. */
+	/** A key went down with no screen open; true if RICO used it. */
 	public static boolean keyPressed(int key) {
 		if (com.arcticlauncher.client.replay.Replays.watching()) {
 			if (key == Keys.RIGHT_SHIFT) {
@@ -461,7 +461,7 @@ public final class ArcticClient {
 
 	/**
 	 * A key went down over one of Minecraft's own screens (not while typing);
-	 * true if Arctic used it. Right Shift opens the Arctic menu anywhere.
+	 * true if RICO used it. Right Shift opens the RICO menu anywhere.
 	 */
 	public static boolean screenKeyPressed(int key) {
 		if (key == Keys.RIGHT_SHIFT) {
@@ -499,12 +499,12 @@ public final class ArcticClient {
 		return new TitleMenu();
 	}
 
-	/** What the Arctic button opens: the hub (Configure HUD, Mods, Replays, Friends...). */
+	/** What the RICO button opens: the hub (Configure HUD, Mods, Replays, Friends...). */
 	public static Page hub() {
 		return Menus.hub();
 	}
 
-	/** The Arctic button's label: with the number of unread chats and new features, if any. */
+	/** The RICO button's label: with the number of unread chats and new features, if any. */
 	public static String hubLabel() {
 		int n = config == null ? 0 : Menus.badge();
 		return n > 0 ? "RICO (" + (n > 9 ? "9+" : String.valueOf(n)) + ")" : "RICO";

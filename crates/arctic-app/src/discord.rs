@@ -3,7 +3,7 @@
 //! Discord isn't running, and only talks to Discord when the presence
 //! actually changes.
 //!
-//! While the game runs, the Arctic Client reports where it is over the
+//! While the game runs, the RICO Client reports where it is over the
 //! launcher's local bridge (the same `/v1/voice` report friends' voice
 //! already uses). With "Show server in Discord status" on, that place
 //! becomes the top line. The report is read on the UI thread; this module
@@ -21,9 +21,8 @@ const APP_ID: &str = "1553107151306760263";
 /// Discord application "RICO Client", shown while the game runs (Discord
 /// titles a presence with its application's name).
 const CLIENT_APP_ID: &str = "1554589488825639042";
-const LOGO: &str =
-    "https://raw.githubusercontent.com/brksfrb/arctic-launcher/main/docs/assets/icon.png";
-const SITE: &str = "https://arcticlauncher.com";
+const LOGO: &str = "https://raw.githubusercontent.com/matchmaker2026new-max/rico-launcher/main/assets/rico-logo.png";
+const SITE: &str = "https://github.com/matchmaker2026new-max/rico-launcher";
 /// How often to look for Discord again while it isn't running.
 const RETRY: Duration = Duration::from_secs(20);
 /// Discord rejects a line longer than this.
@@ -48,7 +47,7 @@ pub struct Presence {
     pub large_text: String,
     /// Unix milliseconds; Discord shows the elapsed time.
     pub since: i64,
-    /// The game is running (shown as the Arctic Client).
+    /// The game is running (shown as the RICO Client).
     pub in_game: bool,
 }
 

@@ -1,4 +1,4 @@
-//! Arctic Client waypoints: `config/arctic-waypoints.json` in an instance's
+//! RICO Client waypoints: `config/arctic-waypoints.json` in an instance's
 //! game folder, a map from world (a server address, or `sp:` + a
 //! singleplayer world's name) to its waypoints. The game reads and writes
 //! the same file.

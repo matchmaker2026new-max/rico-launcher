@@ -1,4 +1,4 @@
-//! "Quick tip" in the sidebar: one of Arctic's features at a time, a new one every few minutes,
+//! "Quick tip" in the sidebar: one of RICO's features at a time, a new one every few minutes,
 //! opening where it lives when clicked. Settings → "Show quick tips" hides it.
 
 use std::time::{Duration, Instant};

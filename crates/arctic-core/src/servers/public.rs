@@ -1,4 +1,4 @@
-//! The public server list on the Arctic server: browse it (a new random
+//! The public server list on the RICO server: browse it (a new random
 //! order each time, nothing paid or pinned), list your own server (it waits
 //! for a moderator), and the admin review itself.
 
@@ -21,7 +21,7 @@ pub struct PublicServer {
     pub description: String,
     #[serde(default)]
     pub tags: Vec<String>,
-    /// `None` until the Arctic server could tell.
+    /// `None` until the RICO server could tell.
     #[serde(default)]
     pub cracked: Option<bool>,
     #[serde(default)]
@@ -102,7 +102,7 @@ pub fn pick(servers: &[PublicServer], access: Access, seed: u64) -> Option<&Publ
     (!allowed.is_empty()).then(|| allowed[(seed % allowed.len() as u64) as usize])
 }
 
-/// List your server (signed in with an Arctic token).
+/// List your server (signed in with an RICO token).
 pub fn submit(
     base: &str,
     token: &str,

@@ -1,5 +1,5 @@
-//! Replays the Arctic Client kept in an instance: `replay_recordings/*.mcpr`
-//! (ReplayMod's format, plus Arctic's `arctic.json` and a thumbnail).
+//! Replays the RICO Client kept in an instance: `replay_recordings/*.mcpr`
+//! (ReplayMod's format, plus RICO's `arctic.json` and a thumbnail).
 
 use std::fs;
 use std::io::Read;
@@ -186,10 +186,10 @@ pub fn trash(replay: &Replay) -> Result<()> {
     Ok(())
 }
 
-/// Where the Arctic Client keeps gameplay videos (MP4), in a game folder.
+/// Where the RICO Client keeps gameplay videos (MP4), in a game folder.
 pub const VIDEO_FOLDER: &str = "replay_videos";
 
-/// A gameplay video the Arctic Client saved.
+/// A gameplay video the RICO Client saved.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Video {
     pub path: PathBuf,

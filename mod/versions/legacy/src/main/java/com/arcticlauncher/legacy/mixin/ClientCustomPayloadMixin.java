@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * The server's Simple Voice Chat secret goes to voice chat; a server that lists {@code arctic:hello}
- * gets Arctic's hello (its channel list arrives on {@code REGISTER}); these channels are taken quietly.
+ * gets RICO's hello (its channel list arrives on {@code REGISTER}); these channels are taken quietly.
  */
 @Mixin(ClientPlayNetworkHandler.class)
 abstract class ClientCustomPayloadMixin {

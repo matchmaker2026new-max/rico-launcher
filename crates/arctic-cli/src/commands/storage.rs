@@ -1,4 +1,4 @@
-//! `arctic storage`: where Arctic keeps its files, and moving them to another folder.
+//! `arctic storage`: where RICO keeps its files, and moving them to another folder.
 
 use std::path::{Path, PathBuf};
 

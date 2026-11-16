@@ -1,4 +1,4 @@
-//! 3D cosmetics from the Arctic server: the catalog, and each item's
+//! 3D cosmetics from the RICO server: the catalog, and each item's
 //! Blockbench (Bedrock) geometry, parsed with the same limits the game
 //! uses. The launcher draws them on the skin preview; the game wears them.
 

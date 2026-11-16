@@ -9,7 +9,7 @@ final class LegacyWindowSize {
 	private int lastWidth;
 	private int lastHeight;
 
-	/** Returns a real size change or an Arctic repair, for the cursor guard. */
+	/** Returns a real size change or an RICO repair, for the cursor guard. */
 	boolean sync(boolean created, int width, int height, boolean fullscreen,
 			int clientWidth, int clientHeight, Resize resize) {
 		if (!created) {

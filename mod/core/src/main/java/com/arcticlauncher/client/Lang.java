@@ -14,7 +14,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * The Arctic Client's text in the player's language.
+ * The RICO Client's text in the player's language.
  *
  * <p>Every piece of text the client shows goes through {@link #t(String)} (with {@code {0}},
  * {@code {1}}… placeholders through {@link #t(String, Object...)}) or {@link #plural}. English is
@@ -257,7 +257,7 @@ public final class Lang {
 				}
 			} catch (RuntimeException e) {
 				if (platform != null) {
-					platform.log(true, "Arctic text " + path + " is broken: " + e);
+					platform.log(true, "RICO text " + path + " is broken: " + e);
 				}
 			} finally {
 				try {

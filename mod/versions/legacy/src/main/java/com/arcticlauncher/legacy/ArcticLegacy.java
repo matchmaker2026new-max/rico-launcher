@@ -5,7 +5,7 @@ import net.fabricmc.api.ClientModInitializer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-/** Arctic Client on old Minecraft (Legacy Fabric): starts the shared core. */
+/** RICO Client on old Minecraft (Legacy Fabric): starts the shared core. */
 public final class ArcticLegacy implements ClientModInitializer {
 	public static final Logger LOG = LogManager.getLogger("RICO");
 	static final LegacyPlatform PLATFORM = new LegacyPlatform();

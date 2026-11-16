@@ -22,7 +22,7 @@ public interface Gfx {
 	int textWidth(String text);
 
 	/**
-	 * Draw part of a texture: {@code "icon"} (the Arctic snowflake),
+	 * Draw part of a texture: {@code "icon"} (the RICO snowflake),
 	 * {@code "look:<hash>"} (a downloaded look texture) or
 	 * {@code "asset:<name>"} ({@code assets/arctic/<name>.png} in the jar).
 	 */

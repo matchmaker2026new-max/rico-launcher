@@ -2,7 +2,7 @@
 //! direct (or relayed) connections to the other voice chat members on the
 //! same Minecraft server and trades voice packets as unreliable datagrams
 //! (a late packet is worse than a lost one). Who to connect to comes from
-//! the caller (the Arctic server's room list); only one side of each pair
+//! the caller (the RICO server's room list); only one side of each pair
 //! dials (the lower id), the other accepts.
 
 use std::collections::{HashMap, HashSet};
@@ -57,7 +57,7 @@ impl VoiceNet {
         })
     }
 
-    /// This launcher's id, for the Arctic server's room list.
+    /// This launcher's id, for the RICO server's room list.
     pub fn node(&self) -> &str {
         &self.node
     }

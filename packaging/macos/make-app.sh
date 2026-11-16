@@ -3,8 +3,8 @@
 # (run on a Mac, after `cargo build --release --target aarch64-apple-darwin`
 # and `--target x86_64-apple-darwin` for arctic-app and arctic-cli):
 #
-#   dist/arctic-launcher-macos.zip   RICO.app (what people download)
-#   dist/arctic-launcher-macos       the launcher program alone (what updates replace)
+#   dist/rico-launcher-macos.zip   RICO.app (what people download)
+#   dist/rico-launcher-macos       the launcher program alone (what updates replace)
 #   dist/arctic-macos                the command line tool
 #
 # Everything is universal (both kinds of Mac). With APPLE_SIGN_IDENTITY set (the release workflow sets it
@@ -34,32 +34,32 @@ sign() {
 
 mkdir -p "$OUT"
 rm -rf "$APP"
-lipo -create "$ARM/arctic-launcher" "$INTEL/arctic-launcher" -output "$OUT/arctic-launcher-macos"
+lipo -create "$ARM/rico-launcher" "$INTEL/rico-launcher" -output "$OUT/rico-launcher-macos"
 lipo -create "$ARM/arctic" "$INTEL/arctic" -output "$OUT/arctic-macos"
-sign "$OUT/arctic-launcher-macos"
+sign "$OUT/rico-launcher-macos"
 sign "$OUT/arctic-macos"
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$OUT/arctic-launcher-macos" "$APP/Contents/MacOS/arctic-launcher"
+cp "$OUT/rico-launcher-macos" "$APP/Contents/MacOS/rico-launcher"
 sed "s/@VERSION@/$VERSION/g" "$HERE/Info.plist" > "$APP/Contents/Info.plist"
 
 # The icon, drawn by the launcher itself at every size macOS wants.
 ICONSET="$(mktemp -d)/AppIcon.iconset"
 mkdir -p "$ICONSET"
 for size in 16 32 128 256 512; do
-  "$OUT/arctic-launcher-macos" --write-icon "$ICONSET/icon_${size}x${size}.png" "$size"
-  "$OUT/arctic-launcher-macos" --write-icon "$ICONSET/icon_${size}x${size}@2x.png" "$((size * 2))"
+  "$OUT/rico-launcher-macos" --write-icon "$ICONSET/icon_${size}x${size}.png" "$size"
+  "$OUT/rico-launcher-macos" --write-icon "$ICONSET/icon_${size}x${size}@2x.png" "$((size * 2))"
 done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 
 sign --deep "$APP"
-(cd "$OUT" && rm -f arctic-launcher-macos.zip && ditto -c -k --keepParent "RICO.app" arctic-launcher-macos.zip)
+(cd "$OUT" && rm -f rico-launcher-macos.zip && ditto -c -k --keepParent "RICO.app" rico-launcher-macos.zip)
 
 # Notarization: Apple scans the app; the ticket is stapled to it so it opens without any warning, offline too.
 if [ -n "${APPLE_SIGN_IDENTITY:-}" ] && [ -n "${APPLE_API_KEY_PATH:-}" ]; then
   echo "Notarizing (Apple's scan can take a few minutes)"
   result="$OUT/notarization.json"
-  xcrun notarytool submit "$OUT/arctic-launcher-macos.zip" --key "$APPLE_API_KEY_PATH" \
+  xcrun notarytool submit "$OUT/rico-launcher-macos.zip" --key "$APPLE_API_KEY_PATH" \
     --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait --output-format json > "$result" || true
   cat "$result"
   if ! grep -q '"status" *: *"Accepted"' "$result"; then
@@ -69,6 +69,6 @@ if [ -n "${APPLE_SIGN_IDENTITY:-}" ] && [ -n "${APPLE_API_KEY_PATH:-}" ]; then
     exit 1
   fi
   xcrun stapler staple "$APP"
-  (cd "$OUT" && rm -f arctic-launcher-macos.zip && ditto -c -k --keepParent "RICO.app" arctic-launcher-macos.zip)
+  (cd "$OUT" && rm -f rico-launcher-macos.zip && ditto -c -k --keepParent "RICO.app" rico-launcher-macos.zip)
 fi
-echo "Built $OUT/arctic-launcher-macos.zip"
+echo "Built $OUT/rico-launcher-macos.zip"

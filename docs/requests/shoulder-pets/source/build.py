@@ -1,7 +1,7 @@
 """Build three original Minecraft-scale shoulder companions as animated GLBs.
 
 Run from any directory. Geometry is authored in player pixel units; the
-borrowed Arctic GLB writer only serializes this original geometry.
+borrowed RICO GLB writer only serializes this original geometry.
 """
 from __future__ import annotations
 
@@ -68,7 +68,7 @@ def save(name,parts,nodes,tracks,period=3.2,keys=80):
             'baseColorFactor':[1,1,1,1],'metallicFactor':0,
             'roughnessFactor':1},'emissiveFactor':[.8,.36,.04],
             'doubleSided':True})
-    doc={'asset':{'version':'2.0','generator':'Arctic original shoulder pet trio'},
+    doc={'asset':{'version':'2.0','generator':'RICO original shoulder pet trio'},
          'scene':0,'scenes':[{'nodes':[0]}], 'nodes':nodes,'meshes':meshes,
          'materials':materials,
          'animations':[animation_of(glb,period,keys,tracks)]}

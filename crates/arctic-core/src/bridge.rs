@@ -1,4 +1,4 @@
-//! The launcher bridge: lets a running Arctic Client switch accounts in game.
+//! The launcher bridge: lets a running RICO Client switch accounts in game.
 //!
 //! A tiny HTTP server on 127.0.0.1 (random port) answers only requests with
 //! the secret written into that game's session file. The game can list the
@@ -53,7 +53,7 @@ pub struct AccountEntry {
 #[derive(Debug, Clone)]
 pub struct SessionGrant {
     pub identity: LaunchIdentity,
-    /// A session for the Arctic cosmetics server, if one could be made.
+    /// A session for the RICO cosmetics server, if one could be made.
     pub arctic_token: Option<String>,
 }
 
@@ -117,7 +117,7 @@ pub trait Accounts: Send + Sync + 'static {
     }
 
     /// Wear a library skin (`None`: back to the Minecraft skin) as the
-    /// Arctic look, the same as picking it in the launcher.
+    /// RICO look, the same as picking it in the launcher.
     fn wear_skin(&self, _id: Option<&str>) -> Result<()> {
         Err(crate::Error::Other("skins live in RICO".into()))
     }

@@ -1,4 +1,4 @@
-//! Friends: your Arctic profile (accounts linked into one person, and what
+//! Friends: your RICO profile (accounts linked into one person, and what
 //! friends may see), friend requests, invites and the friend list with
 //! who's online and where, a Join button and invites.
 
@@ -104,9 +104,9 @@ impl ArcticApp {
                         ui.label(
                             RichText::new(
                                 "An offline name is tied to a secret key kept on the PC where it was first used. \
-                                 This PC doesn't have that key (a new PC, a reinstall, or a wiped Arctic folder). \
+                                 This PC doesn't have that key (a new PC, a reinstall, or a wiped RICO folder). \
                                  If you made a recovery code before (Friends, Recovery code), enter it below. \
-                                 If you never did, ask in the Arctic Discord to have the name released.",
+                                 If you never did, ask in the RICO Discord to have the name released.",
                             )
                             .small()
                             .color(p.muted),
@@ -129,7 +129,7 @@ impl ArcticApp {
                 ui.label(
                     RichText::new(
                         "No friends yet. Add someone by their friend code (or a Microsoft account's name); \
-                         they need to use Arctic too.",
+                         they need to use RICO too.",
                     )
                         .small()
                         .color(p.muted),
@@ -155,7 +155,7 @@ impl ArcticApp {
             ui.label(RichText::new(crate::i18n::current("Add a friend")).size(18.0).strong().color(p.text));
             ui.label(
                 RichText::new(
-                    "Type their friend code or their Microsoft account's name. They need to use Arctic too.",
+                    "Type their friend code or their Microsoft account's name. They need to use RICO too.",
                 )
                 .color(p.muted),
             );
@@ -438,7 +438,7 @@ impl ArcticApp {
                     RichText::new(if profile.has_recovery {
                         "A recovery code exists. If this PC ever loses its key it uses its saved copy by itself; a new code replaces both."
                     } else {
-                        "Offline accounts belong to this PC. Arctic makes a code on its own at the next sign-in and keeps it on this PC; make one here to see it and move to another PC."
+                        "Offline accounts belong to this PC. RICO makes a code on its own at the next sign-in and keeps it on this PC; make one here to see it and move to another PC."
                     })
                     .small()
                     .color(p.muted),

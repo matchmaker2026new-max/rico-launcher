@@ -458,7 +458,7 @@ impl ArcticApp {
             .checkbox(&mut client, t!("play.play_with_the_arctic_client"))
             .changed()
         {
-            // For every instance (Settings → Arctic Client has the same switch), and this first one.
+            // For every instance (Settings → RICO Client has the same switch), and this first one.
             self.settings.play_with_client = client;
             let id = self.instance.id.clone();
             self.update_instance(&id, |i| i.arctic_mod = client);

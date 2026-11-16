@@ -21,7 +21,7 @@ flatpak run --command=arctic "$app" --version
 flatpak run --command=arctic "$app" --json update | jq -e '.managed_by == "flatpak"'
 root=$(flatpak run --command=arctic "$app" --json paths | jq -r 'select(.name == "root") | .path')
 test "$root" = "$HOME/.var/app/$app/data/RICO"
-flatpak run --command=sh "$app" -c 'test -f /.flatpak-info && test ! -w /app/bin/arctic-launcher'
+flatpak run --command=sh "$app" -c 'test -f /.flatpak-info && test ! -w /app/bin/rico-launcher'
 
 before=$(flatpak info --user --show-commit "$app")
 mkdir -p "$root"
@@ -50,11 +50,11 @@ timeout 900 flatpak run --command=arctic "$app" launch --instance flatpak-test -
 # Exercise the custom pack picker on the version that exposed Fabric's internal packs.
 flatpak run --command=arctic "$app" instances create flatpak-packs --version 1.21.11 --loader fabric
 flatpak run --command=arctic "$app" instances edit flatpak-packs --arctic-client on --performance on --shaders on --memory 2G \
-  --jvm-args='-Darctic.selftest=packs -Darctic.selftest.requireHidden=true -Darctic.selftest.shader=Arctic-test-shader'
+  --jvm-args='-Darctic.selftest=packs -Darctic.selftest.requireHidden=true -Darctic.selftest.shader=RICO-test-shader'
 timeout 900 flatpak run --command=arctic "$app" launch --instance flatpak-packs --offline FlatpakTest --memory 2G --dry-run > "$results/packs-prepare.log" 2>&1
 game_dir=$(flatpak run --command=arctic "$app" --json instances show flatpak-packs | jq -r '.game_dir')
-mkdir -p "$game_dir/shaderpacks/Arctic-test-shader/shaders"
-printf '# Minimal shader fixture for the Iris load/unload check.\n' > "$game_dir/shaderpacks/Arctic-test-shader/shaders/shaders.properties"
+mkdir -p "$game_dir/shaderpacks/RICO-test-shader/shaders"
+printf '# Minimal shader fixture for the Iris load/unload check.\n' > "$game_dir/shaderpacks/RICO-test-shader/shaders/shaders.properties"
 
 # Real title-screen integrations: test the event-based Mod Menu and Flashback's applied mixin,
 # separately and together, so neither can accidentally cover a broken detection path in the other.

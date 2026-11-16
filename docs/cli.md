@@ -13,7 +13,7 @@ arctic open --launch 1.20.1         # open the launcher window and start 1.20.1
 ```
 
 Download `arctic-windows-x64.exe` or `arctic-linux-x64` from the
-[latest release](https://github.com/brksfrb/arctic-launcher/releases/latest) and put it on
+[latest release](https://github.com/matchmaker2026new-max/rico-launcher/releases/latest) and put it on
 your `PATH` as `arctic`.
 
 ## Global options
@@ -328,7 +328,7 @@ Starts the launcher window, detached. Options are passed through to the GUI:
 | `--no-intro` | Skip the intro animation |
 | `--profile <NAME>` | Open in this profile |
 
-The launcher exe is looked up next to `arctic.exe` (as `arctic-launcher.exe` or
+The launcher exe is looked up next to `arctic.exe` (as `rico-launcher.exe` or
 `RICO Launcher.exe`) or via `ARCTIC_LAUNCHER_EXE`.
 
 ## GUI flags

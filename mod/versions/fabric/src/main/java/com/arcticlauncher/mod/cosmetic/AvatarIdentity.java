@@ -14,7 +14,7 @@ public interface AvatarIdentity {
 
 	void arctic$setUuid(UUID uuid);
 
-	/** Its looks (cosmetics), or null: none, or not an Arctic player. */
+	/** Its looks (cosmetics), or null: none, or not an RICO player. */
 	com.arcticlauncher.client.looks.Look arctic$look();
 
 	void arctic$setLook(com.arcticlauncher.client.looks.Look look);

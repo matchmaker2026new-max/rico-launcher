@@ -6,7 +6,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 
 /**
- * "Join" in Arctic Launcher while this game runs: the launcher queues a server address for this game and the
+ * "Join" in RICO Launcher while this game runs: the launcher queues a server address for this game and the
  * game picks it up here. The game always asks (nothing listens in the game), over the launcher's local
  * bridge on 127.0.0.1, with the bridge secret and a token that only this launch has.
  * The connection itself happens on the game's own tick, leaving the current world or server.

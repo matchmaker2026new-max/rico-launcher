@@ -21,7 +21,7 @@ import net.minecraft.client.Minecraft;
 /**
  * Screenshots for the website ({@code -Darctic.selftest=promo}), made on 26.3: the title screen;
  * a pretty biome with a full HUD in each HUD style (and a mob in the target widget); you in third
- * person wearing cosmetics, mid-emote; the Arctic menu, the emote wheel and the HUD editor with a
+ * person wearing cosmetics, mid-emote; the RICO menu, the emote wheel and the HUD editor with a
  * widget mid-drag. Screenshots go to the game's screenshots folder; the log names each one. Run
  * it in a test instance of its own, as it changes the HUD.
  */
@@ -34,7 +34,7 @@ final class PromoTest {
 	/** Widgets on, in the order they stack. */
 	private static final String[] SHOWN = {"fps", "cps", "coords", "direction", "biome", "compass", "keystrokes", "armor",
 			"effects", "held", "minimap", "target", "scoreboard", "bossbar"};
-	/** The Arctic style first: it's the one the site leads with. */
+	/** The RICO style first: it's the one the site leads with. */
 	private static final String[] STYLES = {"arctic", "clean", "minimal", "rainbow"};
 	/** Worn for the cosmetics shots (one per slot). */
 	private static final List<String> WORN = Arrays.asList("amethyst_spire_crown", "aurora_visor", "helios_wings", "aurora_fox",
@@ -255,7 +255,7 @@ final class PromoTest {
 		//#endif
 	}
 
-	/** The Arctic menu, then the emote wheel. */
+	/** The RICO menu, then the emote wheel. */
 	private static int menus(int t) {
 		t = look(t, 180);
 		later(t, Menus::open);
@@ -475,7 +475,7 @@ final class PromoTest {
 		ArcticClient.config().hudChanged();
 	}
 
-	/** Only {@link #SHOWN}, laid out automatically, in the Arctic style; the custom crosshair. */
+	/** Only {@link #SHOWN}, laid out automatically, in the RICO style; the custom crosshair. */
 	private static void hud() {
 		ClientConfig c = ArcticClient.config();
 		for (HudWidget w : ArcticClient.hud().widgets()) {

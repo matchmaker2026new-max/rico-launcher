@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * In place of the game's "Connection lost" screen: why, and a Reconnect button; with
- * auto-reconnect on (Arctic → Reconnect), it joins again after a countdown, a few times at most.
+ * auto-reconnect on (RICO → Reconnect), it joins again after a countdown, a few times at most.
  */
 public final class DisconnectedPage extends Page {
 	/** Milliseconds the auto-reconnect countdown can be set to. */

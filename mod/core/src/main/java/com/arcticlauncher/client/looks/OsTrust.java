@@ -21,7 +21,7 @@ import javax.net.ssl.X509TrustManager;
  * HTTPS that trusts what the operating system trusts, as well as Java's own
  * list. Old Minecraft runs on a 2015 Java that doesn't know today's
  * certificate authorities, and antivirus HTTPS scanning adds its own root to
- * Windows only; either way Arctic's requests would fail without this.
+ * Windows only; either way RICO's requests would fail without this.
  */
 public final class OsTrust {
 	/** Where Linux and macOS keep the system's certificates (the first one found). */

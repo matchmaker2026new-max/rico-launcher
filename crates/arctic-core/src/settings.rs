@@ -102,15 +102,15 @@ pub struct Settings {
     pub heard_asked: bool,
     /// Versions starred in the version picker.
     pub favorite_versions: Vec<String>,
-    /// Menu style of the Arctic Client in game.
+    /// Menu style of the RICO Client in game.
     pub client_style: ClientStyle,
     /// When `client_style` was picked (Unix seconds; 0 = never). The game
     /// adopts a newer pick, but keeps a style changed in game until then.
     pub client_style_set: u64,
-    /// Fancy mode of the Arctic Client: smooth font and rounded shapes.
+    /// Fancy mode of the RICO Client: smooth font and rounded shapes.
     /// Picked together with `client_style` (same timestamp).
     pub client_fancy: bool,
-    /// Friends may see which server you're on (last known from the Arctic
+    /// Friends may see which server you're on (last known from the RICO
     /// server; until then, the game doesn't say).
     pub share_server_with_friends: bool,
     /// Ask before starting Minecraft just to join a server (the dialog's "Don't show again" turns it off).
@@ -119,7 +119,7 @@ pub struct Settings {
     pub exit_games_with_launcher: bool,
     /// A "Quick tip" card in the sidebar: one feature at a time.
     pub quick_tips: bool,
-    /// Games start with the Arctic Client (the mod). Off: no instance gets it, whatever its own switch says.
+    /// Games start with the RICO Client (the mod). Off: no instance gets it, whatever its own switch says.
     pub play_with_client: bool,
     /// How big the launcher's interface is, in percent on top of the system's display scaling;
     /// 0 is Auto (a little smaller on crowded screens, see arctic-app's zoom.rs).
@@ -197,28 +197,28 @@ impl Default for VoiceSettings {
     }
 }
 
-/// How the Arctic Client styles Minecraft's menus.
+/// How the RICO Client styles Minecraft's menus.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ClientStyle {
     /// Deep night blue with ice accents.
     #[default]
-    Arctic,
+    RICO,
     /// Violet sky with northern-light greens.
     Aurora,
     /// Plain black and white, no colors.
     Classic,
-    /// Minecraft's own menus (the Arctic HUD still works).
+    /// Minecraft's own menus (the RICO HUD still works).
     Vanilla,
 }
 
 impl ClientStyle {
-    pub const ALL: [ClientStyle; 4] = [Self::Arctic, Self::Aurora, Self::Classic, Self::Vanilla];
+    pub const ALL: [ClientStyle; 4] = [Self::RICO, Self::Aurora, Self::Classic, Self::Vanilla];
 
-    /// The id the Arctic mod knows the style by.
+    /// The id the RICO mod knows the style by.
     pub fn id(self) -> &'static str {
         match self {
-            Self::Arctic => "arctic",
+            Self::RICO => "arctic",
             Self::Aurora => "aurora",
             Self::Classic => "classic",
             Self::Vanilla => "vanilla",
@@ -227,7 +227,7 @@ impl ClientStyle {
 
     pub fn name(self) -> &'static str {
         match self {
-            Self::Arctic => "RICO",
+            Self::RICO => "RICO",
             Self::Aurora => "Aurora",
             Self::Classic => "Classic",
             Self::Vanilla => "Vanilla",
@@ -245,7 +245,7 @@ pub enum GameStartAction {
     Minimize,
 }
 
-/// Whether crash reports are sent to Arctic: never on its own unless chosen.
+/// Whether crash reports are sent to RICO: never on its own unless chosen.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CrashReports {
@@ -328,7 +328,7 @@ impl Default for Settings {
             tray_asked: false,
             heard_asked: false,
             favorite_versions: Vec::new(),
-            client_style: ClientStyle::Arctic,
+            client_style: ClientStyle::RICO,
             client_style_set: 0,
             client_fancy: false,
             share_server_with_friends: false,

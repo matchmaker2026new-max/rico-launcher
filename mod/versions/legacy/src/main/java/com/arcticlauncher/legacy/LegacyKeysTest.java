@@ -10,7 +10,7 @@ import net.minecraft.client.MinecraftClient;
  * Development check, only with {@code -Darctic.selftest=keys}: makes a test
  * world, puts a Right Shift press into LWJGL's keyboard queue (as if typed,
  * so the game handles it in its usual order) and reports which screen is
- * open every second: the Arctic menu should open and stay. On 1.8 it also
+ * open every second: the RICO menu should open and stay. On 1.8 it also
  * feeds a sign update for a sign that isn't loaded, which must not reach
  * the chat. Quits after 20 seconds.
  */

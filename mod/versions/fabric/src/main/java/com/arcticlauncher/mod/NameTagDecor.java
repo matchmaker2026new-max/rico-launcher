@@ -11,7 +11,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 
 /**
- * What goes in front of a player's name tag: the Arctic badge, the ping and the PvP tier.
+ * What goes in front of a player's name tag: the RICO badge, the ping and the PvP tier.
  *
  * <p>From 26.2 a name tag's text is kept from frame to frame by performance mods (Polarium) for as long as the
  * game's own parts of it stay the same, with its laid-out glyphs on the text object itself. So this is added

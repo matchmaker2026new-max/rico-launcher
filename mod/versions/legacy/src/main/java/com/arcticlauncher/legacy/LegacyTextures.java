@@ -14,8 +14,8 @@ import net.minecraft.util.Identifier;
 
 /**
  * Textures the core draws by key: "look:hash" (skins and capes from the
- * Arctic server), "asset:name" (PNGs in the jar's assets/arctic/),
- * "dyn:name" (drawn at runtime, like the minimap) and the Arctic icon.
+ * RICO server), "asset:name" (PNGs in the jar's assets/arctic/),
+ * "dyn:name" (drawn at runtime, like the minimap) and the RICO icon.
  * Without Legacy Fabric API the jar's assets aren't game resources, so
  * they're read from the jar and uploaded here.
  */

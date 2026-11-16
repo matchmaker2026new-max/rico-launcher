@@ -68,7 +68,7 @@
   "replay.nothing_to_save_yet": "Aún no hay nada que guardar",
   "replay.nothing_was_recorded": "No se grabó nada.",
   "replay.older_clips_have_3d_data_only_render_them": "Los clips antiguos solo tienen datos 3D. Renderízalos desde el editor de repeticiones si hace falta.",
-  "replay.open_arctic_launcher_to_add_ffmpeg": "Abre Arctic Launcher para añadir FFmpeg",
+  "replay.open_arctic_launcher_to_add_ffmpeg": "Abre RICO Launcher para añadir FFmpeg",
   "replay.open_it_from_an_instance_of_that_version": ". Ábrelo desde una instancia de esa versión.",
   "replay.open_videos_folder": "Abrir la carpeta de vídeos",
   "replay.opening_replay": "Abriendo repetición",

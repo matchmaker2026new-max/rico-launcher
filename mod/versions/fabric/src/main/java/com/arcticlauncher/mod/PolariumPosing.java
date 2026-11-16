@@ -2,7 +2,7 @@ package com.arcticlauncher.mod;
 
 /**
  * Polarium (the crowd performance mod) works most players' poses out
- * directly, skipping the model's setupAnim; it asks this whether Arctic
+ * directly, skipping the model's setupAnim; it asks this whether RICO
  * poses a player this frame (an emote playing), so those still go through
  * setupAnim and its emote hook (PlayerModelEmoteMixin). A plain JDK
  * interface, so neither mod depends on the other. Called on Polarium's

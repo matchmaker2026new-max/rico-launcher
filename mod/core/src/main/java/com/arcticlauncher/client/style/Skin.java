@@ -4,7 +4,7 @@ import com.arcticlauncher.client.gfx.Draw;
 import com.arcticlauncher.client.gfx.Gfx;
 
 /**
- * How widgets look in a style. Arctic's own widgets and the restyled vanilla
+ * How widgets look in a style. RICO's own widgets and the restyled vanilla
  * ones both draw through here, so every screen matches.
  */
 public final class Skin {

@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Draws the Arctic HUD over the vanilla one (26.2 split the HUD out of Gui). */
+/** Draws the RICO HUD over the vanilla one (26.2 split the HUD out of Gui). */
 //#if MC >= 26.2
 @Mixin(Hud.class)
 //#else

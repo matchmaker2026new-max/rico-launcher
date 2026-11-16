@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-/** The volume sliders (Music & Sounds) get the Arctic style's handle too (as {@link OptionSliderWidgetMixin}). */
+/** The volume sliders (Music & Sounds) get the RICO style's handle too (as {@link OptionSliderWidgetMixin}). */
 @Mixin(targets = "net.minecraft.client.gui.screen.SoundsScreen$SoundButtonWidget")
 abstract class SoundSliderWidgetMixin {
 	// The class isn't public, so the handle takes it as a button; optional (require = 0): if that ever

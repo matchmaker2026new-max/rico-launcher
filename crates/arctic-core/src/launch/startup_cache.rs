@@ -1,4 +1,4 @@
-//! What a start can reuse from the one before, kept per game folder for the Arctic Client:
+//! What a start can reuse from the one before, kept per game folder for the RICO Client:
 //! the list of classes a start loads (so it can load them ahead on other cores, its
 //! `Preloader`) and the classes themselves as Fabric and Mixin leave them (its `MixinCache`).
 //!
@@ -23,7 +23,7 @@ const OFF: &str = "off";
 /// After the game failed before any mod ran (a class of the loader's own libraries not found):
 /// later starts of this game folder go without the agent and the class list, the one thing the
 /// launcher adds to the loader's start. Slower to start, but the loader then starts as it does
-/// without Arctic.
+/// without RICO.
 pub fn turn_off(game_dir: &Path) {
     let dir = game_dir.join(DIR);
     let _ = fs::create_dir_all(&dir);
@@ -78,7 +78,7 @@ fn pack_key(game_dir: &Path, base: &str) -> String {
         files.sort_by_key(|e| e.file_name());
         for entry in files {
             let path = entry.path();
-            // The Arctic Client's own files (session, waypoints, settings) change as it runs and
+            // The RICO Client's own files (session, waypoints, settings) change as it runs and
             // choose no mixins (it has no Mixin plugin).
             if entry.file_name().to_string_lossy().starts_with("arctic") {
                 continue;

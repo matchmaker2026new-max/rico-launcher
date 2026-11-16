@@ -96,9 +96,9 @@ public final class SvcPayload {
 	public static final Identifier SECRET = Identifier.fromNamespaceAndPath("voicechat", "secret");
 	public static final Identifier REQUEST = Identifier.fromNamespaceAndPath("voicechat", "request_secret");
 	public static final Identifier REGISTER = Identifier.withDefaultNamespace("register");
-	/** Tells a server that wants to know that Arctic is here (see {@link #hello()}). */
+	/** Tells a server that wants to know that RICO is here (see {@link #hello()}). */
 	public static final Identifier HELLO = Identifier.fromNamespaceAndPath("arctic", "hello");
-	/** The same for Polarium, which relies on Arctic to say it when both are installed. */
+	/** The same for Polarium, which relies on RICO to say it when both are installed. */
 	public static final Identifier POLARIUM_HELLO = Identifier.fromNamespaceAndPath("polarium", "hello");
 	//#else
 	// Before 1.21 there was no fromNamespaceAndPath/withDefaultNamespace, just constructors.
@@ -118,9 +118,9 @@ public final class SvcPayload {
 	/** Fabric API owns channel registration when it's installed. */
 	private static final boolean OWN_REGISTER = !FabricLoader.getInstance().isModLoaded("fabric-networking-api-v1");
 
-	/** Whether Arctic reads and writes this payload itself. */
+	/** Whether RICO reads and writes this payload itself. */
 	public static boolean handles(Identifier id) {
-		// The hello and the server's channel list are Arctic's own, whether or not voice chat is.
+		// The hello and the server's channel list are RICO's own, whether or not voice chat is.
 		return HELLO.equals(id) || POLARIUM_HELLO.equals(id) || (OWN_REGISTER && REGISTER.equals(id)) || (ENABLED && (SECRET.equals(id) || REQUEST.equals(id)));
 	}
 
@@ -135,10 +135,10 @@ public final class SvcPayload {
 		return out;
 	}
 
-	/** What the server sent on a channel Arctic {@linkplain #handles handles}: its channel list or its voice chat secret. */
+	/** What the server sent on a channel RICO {@linkplain #handles handles}: its channel list or its voice chat secret. */
 	public static void received(Connection connection, Identifier channel, byte[] data) {
 		if (REGISTER.equals(channel)) {
-			// Say hello to the servers that list a hello channel (Arctic's, and Polarium's on its behalf).
+			// Say hello to the servers that list a hello channel (RICO's, and Polarium's on its behalf).
 			Greeter.greet(connection, channelsIn(data));
 			return;
 		}
@@ -182,9 +182,9 @@ public final class SvcPayload {
 	}
 
 	/**
-	 * The one message Arctic sends a server that asked for it (by listing
+	 * The one message RICO sends a server that asked for it (by listing
 	 * {@code arctic:hello} among its channels): the mod's version and that the
-	 * launcher is Arctic, as UTF-8 JSON. Nothing about the player or the PC.
+	 * launcher is RICO, as UTF-8 JSON. Nothing about the player or the PC.
 	 */
 	public static SvcPayload hello() {
 		String version = FabricLoader.getInstance().getModContainer("arctic")
@@ -197,7 +197,7 @@ public final class SvcPayload {
 
 	/**
 	 * Polarium's hello ({@code {"version":"<its version>"}}), or null without Polarium. Polarium
-	 * leaves it to Arctic when both are installed: only one of them can read the server's channel list.
+	 * leaves it to RICO when both are installed: only one of them can read the server's channel list.
 	 */
 	public static SvcPayload polariumHello() {
 		java.util.Optional<net.fabricmc.loader.api.ModContainer> polarium = FabricLoader.getInstance().getModContainer("polarium");

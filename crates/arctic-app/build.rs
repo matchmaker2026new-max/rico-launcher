@@ -22,7 +22,10 @@ fn main() {
     res.set_icon(&ico.to_string_lossy());
     res.set("ProductName", "RICO");
     res.set("FileDescription", "RICO");
-    res.set("LegalCopyright", "LicenseRef-RICO-Source-Available-Restricted");
+    res.set(
+        "LegalCopyright",
+        "LicenseRef-RICO-Source-Available-Restricted",
+    );
     // A missing resource compiler must not break the build; the exe just
     // keeps the default icon.
     if let Err(e) = res.compile() {

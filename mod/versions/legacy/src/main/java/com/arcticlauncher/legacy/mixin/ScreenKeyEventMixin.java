@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 /**
  * 1.8 hands each key press to the key bindings first and then to the open
  * screen, in the same step. When the press opened a screen (Right Shift
- * opening the Arctic menu while playing), that new screen got the same
+ * opening the RICO menu while playing), that new screen got the same
  * press too and reacted to it. The press that opened it stays with whoever
  * used it.
  */

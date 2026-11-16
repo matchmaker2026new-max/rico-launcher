@@ -2,10 +2,10 @@
 //! game asks for a voice secret and hands it here; this talks to the
 //! server's voice port like a Simple Voice Chat client would. Your voice
 //! goes to the server (which passes it to SVC players nearby), and theirs
-//! comes back into the same mixer as Arctic voices.
+//! comes back into the same mixer as RICO voices.
 //!
-//! A player heard both ways (an Arctic player who is also connected to
-//! SVC) is only played from Arctic's direct connection.
+//! A player heard both ways (an RICO player who is also connected to
+//! SVC) is only played from RICO's direct connection.
 
 use std::collections::{HashMap, HashSet};
 use std::net::{ToSocketAddrs, UdpSocket};
@@ -115,7 +115,7 @@ pub struct SvcSide {
     /// The game report the link was made from.
     from_game: Option<GameSvc>,
     heard: Arc<Mutex<HashMap<String, Heard>>>,
-    /// Arctic room members (their SVC copies are skipped).
+    /// RICO room members (their SVC copies are skipped).
     arctic: Arc<Mutex<HashSet<String>>>,
 }
 

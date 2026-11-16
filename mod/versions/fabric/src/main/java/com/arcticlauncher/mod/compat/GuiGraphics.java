@@ -16,7 +16,7 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * Before 1.20 the GUI drew through a PoseStack and static helpers; this
- * stands in for 1.20's GuiGraphics (the part Arctic uses), so the rest of
+ * stands in for 1.20's GuiGraphics (the part RICO uses), so the rest of
  * the adapter stays the same. The build points GuiGraphics here on these
  * versions.
  */

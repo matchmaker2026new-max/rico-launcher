@@ -1,4 +1,4 @@
-//! Short share codes (`k3zb-bhzh`), stored on the Arctic server.
+//! Short share codes (`k3zb-bhzh`), stored on the RICO server.
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -29,7 +29,7 @@ pub fn pretty(code: &str) -> String {
     format!("{a}-{b}")
 }
 
-/// Upload a bundle; returns its (pretty) code. `token` is an Arctic
+/// Upload a bundle; returns its (pretty) code. `token` is an RICO
 /// session token (see `cosmetics::token_for`).
 pub fn create(base: &str, token: &str, bundle: &Bundle) -> Result<String> {
     #[derive(Deserialize)]

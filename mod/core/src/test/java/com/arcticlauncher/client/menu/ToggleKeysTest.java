@@ -107,7 +107,7 @@ class ToggleKeysTest {
 	void sameKeyOnTwoFeaturesIsAllowedAndReported() {
 		ToggleKeys.set(mod("connected-glass"), "key.keyboard.j");
 		ToggleKeys.set(mod("weather"), "key.keyboard.j");
-		assertEquals("Connected Glass (Arctic)", ToggleKeys.usedBy(mod("weather"), "key.keyboard.j"));
+		assertEquals("Connected Glass (RICO)", ToggleKeys.usedBy(mod("weather"), "key.keyboard.j"));
 		held.add("key.keyboard.j");
 		ToggleKeys.tick(platform, c, false);
 		assertTrue(c.connectedGlass);
@@ -118,7 +118,7 @@ class ToggleKeysTest {
 	void gameKeyBindingsAndArcticsOwnKeysAreReported() {
 		assertEquals("Walk Forwards", ToggleKeys.usedBy(mod("weather"), "key.keyboard.w"));
 		c.fullbrightKey = "key.keyboard.g";
-		assertEquals("Fullbright (Arctic)", ToggleKeys.usedBy(mod("weather"), "key.keyboard.g"));
+		assertEquals("Fullbright (RICO)", ToggleKeys.usedBy(mod("weather"), "key.keyboard.g"));
 		assertNull(ToggleKeys.usedBy(mod("weather"), "key.keyboard.j"));
 		assertNull(ToggleKeys.usedBy(mod("weather"), "key.keyboard.unknown"));
 	}

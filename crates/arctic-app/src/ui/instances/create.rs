@@ -20,7 +20,7 @@ pub struct CreateForm {
     pub loader_version: Option<String>,
     /// Keeps its own settings instead of sharing the other instances'.
     pub own_settings: bool,
-    /// Without the Arctic Client (or the Arctic mod): pure vanilla or just the other mods.
+    /// Without the RICO Client (or the RICO mod): pure vanilla or just the other mods.
     pub arctic_off: bool,
 }
 
@@ -151,7 +151,7 @@ impl ArcticApp {
                     "Its own: start fresh and keep them separate",
                 );
                 ui.add_space(10.0);
-                ui.label(RichText::new("ARCTIC").small().color(p.muted));
+                ui.label(RichText::new("RICO").small().color(p.muted));
                 let mut arctic = !form.arctic_off;
                 if ui
                     .checkbox(

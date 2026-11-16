@@ -127,7 +127,7 @@ public abstract class Page {
 		return ArcticClient.style();
 	}
 
-	/** Draw the Arctic backdrop; otherwise the game shows behind (blurred). */
+	/** Draw the RICO backdrop; otherwise the game shows behind (blurred). */
 	public boolean ownBackground() {
 		return !ArcticClient.platform().inWorld();
 	}
@@ -293,7 +293,7 @@ public abstract class Page {
 		return focused != null;
 	}
 
-	/** Right Shift: opens the Arctic menu over this page. */
+	/** Right Shift: opens the RICO menu over this page. */
 	protected boolean rightShift() {
 		ArcticClient.platform().openPageOver(ArcticClient.arcticMenu());
 		return true;

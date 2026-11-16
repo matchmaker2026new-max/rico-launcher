@@ -1,4 +1,4 @@
-//! Secrets (account tokens, the proxy password, Arctic server keys) kept
+//! Secrets (account tokens, the proxy password, RICO server keys) kept
 //! encrypted, on disk and in memory; a [`Secret`] is only decrypted for the
 //! moment it's used, into a buffer that's wiped when dropped.
 //!
@@ -27,7 +27,7 @@ const PREFIX: &str = "local1:";
 /// First encrypted builds (Windows, without the Machine GUID).
 #[cfg(windows)]
 const PREFIX_V1: &str = "dpapi:";
-/// Mixed into every key, so other programs can't decrypt Arctic's values
+/// Mixed into every key, so other programs can't decrypt RICO's values
 /// just by asking the system.
 const APP_KEY: &[u8] = b"arctic-launcher/secret/v1";
 

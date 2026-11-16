@@ -39,7 +39,7 @@ pub enum ToastAction {
     OpenFriends,
     /// Link a newly added account into the profile of `into`.
     LinkAccount { into: String, other: String },
-    /// Send this run's crash report to Arctic.
+    /// Send this run's crash report to RICO.
     SendCrash(crate::tasks::LaunchId),
     /// Open this release's notes (after an update).
     WhatsNew(String),

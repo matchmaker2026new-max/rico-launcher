@@ -29,7 +29,7 @@ import com.google.gson.JsonObject;
  * Friends, chat and screenshots in game. Checks for new messages every few
  * seconds and for friends and invites less often; shows pop-ups for
  * messages, invites and screenshots just taken; sends messages and
- * screenshots. Works with the Arctic sign-in the launcher gave the game.
+ * screenshots. Works with the RICO sign-in the launcher gave the game.
  */
 public final class Social {
 	private static final long MESSAGES_EVERY_S = 5;
@@ -112,7 +112,7 @@ public final class Social {
 
 	/**
 	 * Screenshots are watched from the start (copying them needs no sign-in). Friends wait for the
-	 * Arctic sign-in, which may finish only after the client has started (signing in through Mojang
+	 * RICO sign-in, which may finish only after the client has started (signing in through Mojang
 	 * runs in the background): until then each poll just finds no token.
 	 */
 	public void start() {

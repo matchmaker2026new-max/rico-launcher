@@ -7,7 +7,7 @@ import com.arcticlauncher.client.style.Style;
 import com.arcticlauncher.client.ui.Button;
 import com.arcticlauncher.client.ui.Page;
 
-/** Arctic's title screen, in place of Minecraft's. */
+/** RICO's title screen, in place of Minecraft's. */
 public final class TitleMenu extends Page {
 	private static final int BUTTON_W = 200;
 	private static final int BUTTON_H = 20;

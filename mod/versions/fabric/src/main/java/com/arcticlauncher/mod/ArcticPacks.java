@@ -19,7 +19,7 @@ import net.minecraft.server.packs.repository.PackSource;
 import net.minecraft.server.packs.repository.RepositorySource;
 
 /**
- * Arctic's built-in resource packs, served from the mod jar. For now the
+ * RICO's built-in resource packs, served from the mod jar. For now the
  * smooth font (Inter over Minecraft's pixel font); it also shows in the
  * Resource Packs screen, and Minecraft remembers whether it's on.
  */

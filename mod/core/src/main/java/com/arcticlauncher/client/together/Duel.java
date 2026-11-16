@@ -27,7 +27,7 @@ public final class Duel {
 	private final Social social;
 	private Stage stage = Stage.NONE;
 	private String kit = "sword";
-	/** Friend to invite once the code is ready (their Arctic id), or null. */
+	/** Friend to invite once the code is ready (their RICO id), or null. */
 	private String friendId;
 	private String friendName;
 	private int ticks;

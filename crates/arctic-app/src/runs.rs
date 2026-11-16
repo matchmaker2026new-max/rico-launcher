@@ -486,7 +486,7 @@ impl ArcticApp {
                     if d.repair {
                         arctic_core::launch::files::request_repair(&self.dirs);
                         // The loader failed before any mod ran: the next start also goes without the
-                        // client's startup agent, the one thing Arctic adds to the loader's start.
+                        // client's startup agent, the one thing RICO adds to the loader's start.
                         arctic_core::launch::startup_cache::turn_off(&run.game_dir);
                     }
                 }
@@ -497,7 +497,7 @@ impl ArcticApp {
                 if crashed {
                     run.push_log([LogLine {
                         level: Level::Info,
-                        text: "Need help with this crash? Join our Discord: https://discord.arcticlauncher.com"
+                        text: "Need help with this crash? Join our Discord: https://github.com/matchmaker2026new-max/rico-launcher/issues"
                             .into(),
                     }]);
                     let report =
@@ -625,7 +625,7 @@ impl ArcticApp {
 
 impl ArcticApp {
     /// The proxy covers Minecraft's login services for every game, but server
-    /// connections only through the Arctic Client (Fabric/Quilt and Vanilla
+    /// connections only through the RICO Client (Fabric/Quilt and Vanilla
     /// instances that have it on). Say so when a game that skips it starts.
     pub(crate) fn warn_if_proxy_misses_servers(
         &mut self,

@@ -9,7 +9,7 @@ import net.minecraft.client.render.entity.feature.FeatureRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
-/** Lets Arctic add its render layers to living-entity renderers. */
+/** Lets RICO add its render layers to living-entity renderers. */
 @Mixin(LivingEntityRenderer.class)
 public interface LivingEntityRendererAccess {
 	@SuppressWarnings({"rawtypes", "unchecked"})

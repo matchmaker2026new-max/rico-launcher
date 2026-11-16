@@ -58,7 +58,7 @@ const NEW: &[(&str, &str)] = &[
     ("playtime", "session"),
 ];
 
-/// HUD mods Arctic has no widget for (named when they're on).
+/// HUD mods RICO has no widget for (named when they're on).
 const OTHER_HUD_OLD: &[(&str, &str)] = &[("BlockInfo", "Block Info")];
 const OTHER_HUD_NEW: &[(&str, &str)] = &[
     ("watermark", "Watermark"),
@@ -293,7 +293,7 @@ mod tests {
         assert_eq!(v["hud"]["cps"]["ax"], json!(2));
         assert_eq!(v["hud"]["keystrokes"]["enabled"], json!(false));
         assert_eq!(v["fullbright"], json!(true));
-        assert_eq!(found.notes, vec!["No Arctic match for: Block Info"]);
+        assert_eq!(found.notes, vec!["No RICO match for: Block Info"]);
     }
 
     #[test]
@@ -322,6 +322,6 @@ mod tests {
         assert_eq!(v["hud"]["clock"]["ay"], json!(2));
         assert_eq!(v["hud"]["ping"]["placed"], json!(false));
         assert_eq!(v["hud"]["cps"]["enabled"], json!(false));
-        assert_eq!(found.notes, vec!["No Arctic match for: Watermark"]);
+        assert_eq!(found.notes, vec!["No RICO match for: Watermark"]);
     }
 }

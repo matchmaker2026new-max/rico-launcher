@@ -12,7 +12,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Your skin library in Arctic Launcher, for picking a skin in the game. The
+ * Your skin library in RICO Launcher, for picking a skin in the game. The
  * launcher wears it (the same as clicking it there), so it saves and shows
  * the same way.
  */

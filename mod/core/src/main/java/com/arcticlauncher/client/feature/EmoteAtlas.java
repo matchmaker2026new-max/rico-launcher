@@ -104,14 +104,14 @@ public final class EmoteAtlas {
 		add("hud.reactions_and_symbols", "boom");
 		add("hud.reactions_and_symbols", "ghost");
 		add("hud.reactions_and_symbols", "pick", "pickaxe");
-		add("Arctic", "arctic");
-		add("Arctic", "snowflake", "snow");
-		add("Arctic", "ice");
-		add("Arctic", "cold", "cold_face");
-		add("Arctic", "penguin");
-		add("Arctic", "snowman");
-		add("Arctic", "ice_cube", "iceberg");
-		add("Arctic", "bear");
+		add("RICO", "arctic");
+		add("RICO", "snowflake", "snow");
+		add("RICO", "ice");
+		add("RICO", "cold", "cold_face");
+		add("RICO", "penguin");
+		add("RICO", "snowman");
+		add("RICO", "ice_cube", "iceberg");
+		add("RICO", "bear");
 		// END GENERATED
 	}
 	private EmoteAtlas() {}

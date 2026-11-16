@@ -19,7 +19,7 @@ import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.entity.state.PlayerRenderState;
 //#endif
 
-/** Players get Arctic's cosmetics layer (before 1.21.9, where players had their own renderer and no Avatar). */
+/** Players get RICO's cosmetics layer (before 1.21.9, where players had their own renderer and no Avatar). */
 @Mixin(PlayerRenderer.class)
 abstract class OldPlayerRendererMixin {
 	@SuppressWarnings({"unchecked", "rawtypes"})

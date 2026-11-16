@@ -283,7 +283,7 @@ public final class Features {
 	/** Told once per game start: OptiFine's own zoom was switched off so the two do not stack. */
 	private static boolean otherZoomChecked;
 
-	/** OptiFine's zoom on the same key zooms too: with Arctic's zoom on, OptiFine's key is unbound (once). */
+	/** OptiFine's zoom on the same key zooms too: with RICO's zoom on, OptiFine's key is unbound (once). */
 	private void checkOtherZoom() {
 		if (otherZoomChecked || !config.zoomEnabled) {
 			return;

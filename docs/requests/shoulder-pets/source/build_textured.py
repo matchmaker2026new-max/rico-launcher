@@ -115,7 +115,7 @@ def save(name,parts,nodes,tracks,period=3.2,keys=80):
         prim['attributes']['NORMAL']=glb.add(data['normal'],'VEC3',5126)
         meshes.append({'name':part_name,'primitives':[prim]})
     binary=io.BytesIO();atlas.save(binary,format='PNG',optimize=True)
-    doc={'asset':{'version':'2.0','generator':'Arctic shoulder pet texture study'},
+    doc={'asset':{'version':'2.0','generator':'RICO shoulder pet texture study'},
          'scene':0,'scenes':[{'nodes':[0]}],'nodes':nodes,'meshes':meshes,
          'materials':[{'name':'voxel_paint','pbrMetallicRoughness':{
             'baseColorTexture':{'index':0},'baseColorFactor':[1,1,1,1],

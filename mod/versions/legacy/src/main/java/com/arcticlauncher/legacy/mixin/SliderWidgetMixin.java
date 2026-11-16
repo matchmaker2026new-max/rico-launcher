@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-/** The other sliders (the world customisation pages) get the Arctic style's handle too (as {@link OptionSliderWidgetMixin}). */
+/** The other sliders (the world customisation pages) get the RICO style's handle too (as {@link OptionSliderWidgetMixin}). */
 @Mixin(net.minecraft.client.gui.widget.SliderWidget.class)
 abstract class SliderWidgetMixin {
 	private static final int HANDLE_W = 8;

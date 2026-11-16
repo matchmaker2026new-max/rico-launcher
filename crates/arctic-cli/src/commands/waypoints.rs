@@ -1,4 +1,4 @@
-//! `arctic waypoints …`: Arctic Client waypoints of an instance.
+//! `arctic waypoints …`: RICO Client waypoints of an instance.
 
 use arctic_core::waypoints;
 use arctic_core::{Error, Result};

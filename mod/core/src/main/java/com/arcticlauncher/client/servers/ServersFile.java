@@ -22,7 +22,7 @@ import java.util.Map;
  * The game's {@code servers.dat}: an uncompressed NBT file whose {@code servers} list holds one
  * compound per server ({@code name}, {@code ip}, {@code icon} as base64, {@code acceptTextures},
  * and since 1.19.3 {@code hidden} for direct connections it remembers). The same on every
- * version, so Arctic edits it itself; every tag is kept as read, ours or not.
+ * version, so RICO edits it itself; every tag is kept as read, ours or not.
  */
 public final class ServersFile {
 	private static final byte END = 0;

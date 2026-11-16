@@ -1,7 +1,7 @@
 //! Mods that stop the game together, found before it starts: the same
 //! mod twice, a mod that says it breaks another, a required mod that's
 //! missing or too old, a mod made for another Minecraft version. Each
-//! comes with the fixes Arctic can make for it.
+//! comes with the fixes RICO can make for it.
 
 use std::collections::HashSet;
 use std::io::Read;
@@ -11,7 +11,7 @@ use serde_json::Value;
 
 use crate::loaders::LoaderKind;
 
-/// Something Arctic can do about a clash.
+/// Something RICO can do about a clash.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fix {
     /// Switch this jar off (it's kept as `.jar.disabled`).
@@ -86,7 +86,7 @@ pub fn check(mods_dir: &Path, loader: LoaderKind, game: &str) -> Vec<Clash> {
     out
 }
 
-/// Files the launcher keeps by itself (the Arctic Client, Polarium, the Performance mods): it puts the
+/// Files the launcher keeps by itself (the RICO Client, Polarium, the Performance mods): it puts the
 /// right ones in at every start, so a copy left from another game version (an instance's mods moved
 /// to another version) isn't a problem to report.
 fn managed_files(mods_dir: &Path) -> Vec<String> {

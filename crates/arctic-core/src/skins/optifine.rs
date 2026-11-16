@@ -1,5 +1,5 @@
 //! OptiFine capes: OptiFine keeps one public PNG per player name on its cape server. They are read
-//! here so a player can wear theirs as an Arctic cape (the game mod shows other players' the same way).
+//! here so a player can wear theirs as an RICO cape (the game mod shows other players' the same way).
 
 use crate::{Error, Result};
 

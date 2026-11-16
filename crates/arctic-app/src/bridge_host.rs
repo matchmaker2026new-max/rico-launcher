@@ -40,11 +40,11 @@ struct GameLink {
     run: u64,
     /// A server address waiting for the game to pick it up.
     join: Option<String>,
-    /// The last time the game asked (a game without the Arctic Client never does).
+    /// The last time the game asked (a game without the RICO Client never does).
     polled: Option<std::time::Instant>,
 }
 
-/// The Arctic Client asks about once a second; a game that has not asked for this long has no client
+/// The RICO Client asks about once a second; a game that has not asked for this long has no client
 /// (or has not finished starting).
 const GAME_ALIVE: std::time::Duration = std::time::Duration::from_secs(5);
 
@@ -487,7 +487,7 @@ impl BridgeHost {
             .retain(|_, g| g.run != run);
     }
 
-    /// Queue `address` for the game of `run`, if that game has the Arctic Client listening. False
+    /// Queue `address` for the game of `run`, if that game has the RICO Client listening. False
     /// when it doesn't (never asked lately), so the caller can fall back.
     pub fn send_join(&self, run: u64, address: &str) -> bool {
         let mut shared = self.shared.lock().unwrap_or_else(PoisonError::into_inner);

@@ -565,7 +565,7 @@ fn a_clean_folder_and_forge_incompatibilities() {
 
 #[test]
 fn the_launchers_own_jars_left_from_another_version_are_not_reported() {
-    // An instance's mods moved to a 1.21.11 instance: the Arctic Client and Polarium of the old
+    // An instance's mods moved to a 1.21.11 instance: the RICO Client and Polarium of the old
     // version are still in the folder, and the launcher replaces them when it starts.
     let root = tempfile::tempdir().unwrap();
     let game_dir = root.path();
@@ -655,7 +655,7 @@ fn reads_sklauncher_3_profiles_and_4_instances() {
     assert_eq!(pvp.loader.as_ref().unwrap().kind, LoaderKind::NeoForge);
     assert_eq!(pvp.memory_mb, Some(4096));
     assert_eq!(pvp.game_dir, data.join("instances/pvp"));
-    // A loader Arctic doesn't have comes in as plain vanilla, said plainly.
+    // A loader RICO doesn't have comes in as plain vanilla, said plainly.
     assert!(scan.instances[1].loader.is_none());
     assert!(
         scan.instances[1]

@@ -1,4 +1,4 @@
-//! Friends on the Arctic server. One Arctic profile is one person: their
+//! Friends on the RICO server. One RICO profile is one person: their
 //! Minecraft accounts are linked into it (each proved by signing in with
 //! it), and friends, requests and invites belong to the profile. What
 //! friends see (online, which server, invites, linked accounts) is each
@@ -384,7 +384,7 @@ pub fn send_with(
     )?)
 }
 
-/// Largest screenshot the Arctic server takes.
+/// Largest screenshot the RICO server takes.
 pub const MAX_UPLOAD: usize = 2 * 1024 * 1024;
 
 /// Upload a screenshot (a PNG, already shrunk); returns its id.

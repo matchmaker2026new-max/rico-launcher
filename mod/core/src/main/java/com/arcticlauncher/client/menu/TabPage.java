@@ -13,7 +13,7 @@ import com.arcticlauncher.client.ui.Toggle;
 import com.arcticlauncher.client.ui.Widget;
 
 /**
- * One screen of the Arctic menu in the shared panel: a header with a back
+ * One screen of the RICO menu in the shared panel: a header with a back
  * arrow, the icon and title (and the mod's switch), and the tab's content.
  */
 final class TabPage extends Page {

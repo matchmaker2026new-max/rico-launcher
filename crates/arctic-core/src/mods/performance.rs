@@ -125,7 +125,7 @@ pub const FORGE_189: &[(&str, &str, &[&str])] = &[
     ),
 ];
 
-/// The only Forge game version with these mods (and with the Arctic Client for Forge).
+/// The only Forge game version with these mods (and with the RICO Client for Forge).
 pub fn forge_supported(game_version: &str) -> bool {
     game_version == "1.8.9"
 }
@@ -214,13 +214,13 @@ impl ForgeIndex<'_> {
 }
 
 /// OneConfig's key for its menu (LWJGL 2 key code) when nothing changed it: Right Shift, which is also
-/// Arctic's menu key (both opened, one after the other); and the key it is given here: Insert.
+/// RICO's menu key (both opened, one after the other); and the key it is given here: Insert.
 const ONECONFIG_KEY: u64 = 54;
 const ONECONFIG_KEY_INSTEAD: u64 = 210;
 
-/// Patcher brings OneConfig, and two of their defaults clash with the Arctic Client: OneConfig's menu
-/// opens on Right Shift (Arctic's too), and Patcher's own font renderer replaces the game's, so
-/// Arctic's fancy font never draws. Moved aside once, as soon as the game has written both files
+/// Patcher brings OneConfig, and two of their defaults clash with the RICO Client: OneConfig's menu
+/// opens on Right Shift (RICO's too), and Patcher's own font renderer replaces the game's, so
+/// RICO's fancy font never draws. Moved aside once, as soon as the game has written both files
 /// (its first start); after that the player's choices stay.
 fn tame_patcher(game_dir: &Path) {
     let marker = game_dir.join("arctic-patcher-settings.json");

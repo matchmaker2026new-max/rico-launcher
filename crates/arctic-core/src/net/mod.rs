@@ -89,7 +89,7 @@ fn build_agent(proxy: Option<ureq::Proxy>) -> ureq::Agent {
     // most parallel downloads redo a TLS handshake. Keep one per worker.
     let config = ureq::Agent::config_builder()
         .tls_config(tls)
-        // Without an Arctic proxy, keep honoring ALL_PROXY / HTTPS_PROXY.
+        // Without an RICO proxy, keep honoring ALL_PROXY / HTTPS_PROXY.
         .proxy(proxy.or_else(ureq::Proxy::try_from_env))
         .max_idle_connections(download::WORKERS * 2)
         .max_idle_connections_per_host(download::WORKERS)

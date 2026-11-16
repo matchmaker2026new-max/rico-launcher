@@ -9,7 +9,7 @@ import java.nio.file.Files;
 
 /**
  * What the launcher leaves in {@code config/arctic-session.json} before a
- * launch: the Arctic server, a sign-in token and the chosen menu style.
+ * launch: the RICO server, a sign-in token and the chosen menu style.
  */
 public final class Session {
 	public final String url;
@@ -49,7 +49,7 @@ public final class Session {
 	}
 
 	/**
-	 * Read the session file and delete it: it holds the Arctic token, the proxy password and the bridge secret,
+	 * Read the session file and delete it: it holds the RICO token, the proxy password and the bridge secret,
 	 * which must not sit in the game folder (backups, sync tools, zipped instances) after this. The launcher
 	 * writes it again for the next launch, and once more if its sign-in finished late.
 	 */

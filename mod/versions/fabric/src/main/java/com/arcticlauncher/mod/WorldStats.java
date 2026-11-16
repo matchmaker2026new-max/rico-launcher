@@ -235,7 +235,7 @@ final class WorldStats {
 		}
 		java.util.List<String> selected = selectedIds(repo);
 		selected.remove(id);
-		// Below Arctic's own packs (the smooth font), above everything else.
+		// Below RICO's own packs (the smooth font), above everything else.
 		int at = selected.size();
 		while (at > 0 && selected.get(at - 1).startsWith("arctic")) {
 			at--;
@@ -269,7 +269,7 @@ final class WorldStats {
 		return on;
 	}
 
-	/** Exactly these packs on (top first), keeping required and Arctic's own ones. */
+	/** Exactly these packs on (top first), keeping required and RICO's own ones. */
 	static void setPacks(java.util.List<String> enabledTopFirst) {
 		Minecraft mc = Minecraft.getInstance();
 		net.minecraft.server.packs.repository.PackRepository repo = mc.getResourcePackRepository();

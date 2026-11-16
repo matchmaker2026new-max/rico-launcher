@@ -4,7 +4,7 @@ import com.arcticlauncher.client.ArcticClient;
 import com.arcticlauncher.client.ui.Page;
 
 /**
- * Where the Arctic menu opens: Right Shift in a world shows the HUD screen
+ * Where the RICO menu opens: Right Shift in a world shows the HUD screen
  * (drag widgets, then Mods); elsewhere it's straight to the Mods screen.
  * Pages can also be opened by name ("friends", "packs", a mod's id…).
  */
@@ -19,12 +19,12 @@ public final class Menus {
 		return new ModsScreen();
 	}
 
-	/** The hub the Arctic button opens. */
+	/** The hub the RICO button opens. */
 	public static Page hub() {
 		return new ArcticHub();
 	}
 
-	/** The number on the Arctic button: unread chat plus new features. */
+	/** The number on the RICO button: unread chat plus new features. */
 	public static int badge() {
 		return ArcticHub.badge();
 	}

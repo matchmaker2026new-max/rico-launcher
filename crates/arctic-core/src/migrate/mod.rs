@@ -1,4 +1,4 @@
-//! Move to Arctic from other launchers and clients: find their instances
+//! Move to RICO from other launchers and clients: find their instances
 //! (version, loader, mods, configs, worlds, packs, game options, memory)
 //! and client HUD setups, then copy them in. Originals are never touched,
 //! and account data never comes along.
@@ -108,7 +108,7 @@ pub struct FoundLoader {
     pub version: Option<String>,
 }
 
-/// One instance (or profile) that can become an Arctic instance.
+/// One instance (or profile) that can become an RICO instance.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Found {
     pub launcher: Launcher,
@@ -129,7 +129,7 @@ pub struct Found {
     pub disabled_mods_dir: Option<PathBuf>,
     /// More folders to bring along: (source, folder in the game dir).
     pub extra_dirs: Vec<(PathBuf, &'static str)>,
-    /// Plain vanilla that follows the newest release: goes into Arctic's
+    /// Plain vanilla that follows the newest release: goes into RICO's
     /// own Vanilla instance instead of a new one.
     pub into_vanilla: bool,
     /// What won't come over exactly, said plainly.

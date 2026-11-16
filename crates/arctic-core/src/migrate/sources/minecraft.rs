@@ -65,7 +65,7 @@ pub(super) fn official_in(scan: &mut Scan, root: &Path) {
             from_version(launcher, &name, info, game_dir.clone())
         } else if let Some((game, loader)) = sklauncher_only(launcher, version) {
             // SKlauncher downloads a version on the first Play, so a new
-            // profile has only its id; Arctic installs the rest.
+            // profile has only its id; RICO installs the rest.
             found(launcher, &name, &game, loader, game_dir.clone())
         } else {
             scan.seen.push((

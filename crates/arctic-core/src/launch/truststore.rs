@@ -3,7 +3,7 @@
 //! Minecraft 1.16.5 and older run on Mojang's Java 8, which is 8u51 from 2015: its list of
 //! trusted certificate authorities is too old for today's HTTPS, so the game can't reach Mojang's
 //! session server (OptiFine's cape editor: "Cannot contact authentication server"), skins, Realms
-//! or Arctic's own servers. Such a game gets a truststore made from this computer's certificate
+//! or RICO's own servers. Such a game gets a truststore made from this computer's certificate
 //! authorities (kept up to date by the operating system), in the JKS format Java 8 reads.
 
 use std::path::{Path, PathBuf};

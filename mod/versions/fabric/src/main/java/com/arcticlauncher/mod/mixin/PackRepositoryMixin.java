@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
-/** Adds Arctic's built-in packs to the game's resource packs (not data packs). */
+/** Adds RICO's built-in packs to the game's resource packs (not data packs). */
 @Mixin(PackRepository.class)
 abstract class PackRepositoryMixin {
 	@ModifyVariable(method = "<init>", at = @At("HEAD"), argsOnly = true)

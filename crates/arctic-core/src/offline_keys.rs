@@ -1,4 +1,4 @@
-//! The keys that claim offline names on the Arctic server.
+//! The keys that claim offline names on the RICO server.
 //!
 //! A key is the only proof that an offline name is yours: lose it and the server refuses the name as
 //! "used by another RICO player" until a recovery code or a moderator frees it. So a key, once made, is

@@ -38,7 +38,7 @@ abstract class PlayerTierMixin {
 			name = Compat.empty().append(Compat.literal(ping)).append(name);
 			changed = true;
 		}
-		// The snowflake of other Arctic players, as in the player list (1.16 and newer: older text has no fonts).
+		// The snowflake of other RICO players, as in the player list (1.16 and newer: older text has no fonts).
 		if (Compat.BADGES && com.arcticlauncher.client.feature.Badge.show(false, player.getUUID())) {
 			Component badge = Compat.arcticBadge();
 			//#if MC >= 1.16

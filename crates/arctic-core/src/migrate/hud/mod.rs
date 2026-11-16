@@ -1,6 +1,6 @@
-//! HUD setups from LabyMod, Lunar, Badlion, Feather, Fast Client and Silent Client, turned into Arctic
+//! HUD setups from LabyMod, Lunar, Badlion, Feather, Fast Client and Silent Client, turned into RICO
 //! Client settings. Positions keep their screen corner (or middle) and
-//! offset; widgets Arctic has no match for are listed, not guessed.
+//! offset; widgets RICO has no match for are listed, not guessed.
 
 pub mod badlion;
 pub mod fastclient;
@@ -14,7 +14,7 @@ use serde_json::{Map, Value, json};
 use super::{FoundClient, Launcher, Scan};
 use crate::sharing::{ClientPart, Part};
 
-/// Arctic's HUD widgets (they're all written, so nothing unexpected shows).
+/// RICO's HUD widgets (they're all written, so nothing unexpected shows).
 const WIDGETS: [&str; 33] = [
     "fps",
     "cps",
@@ -99,7 +99,7 @@ const LUNAR: &[(&str, &str)] = &[
 /// A widget whose on/off state the client didn't save.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Unsure {
-    /// Arctic's widget id.
+    /// RICO's widget id.
     pub widget: String,
     /// The client's name for it.
     pub label: String,
@@ -158,7 +158,7 @@ pub fn labymod(configs: &Path, scan: &mut Scan) {
             continue;
         }
         // Docked next to the hotbar, or never moved (LabyMod keeps those at
-        // 0,0 and arranges them itself): Arctic arranges them too.
+        // 0,0 and arranges them itself): RICO arranges them too.
         let docked = w.get("dropzoneId").and_then(Value::as_str).is_some();
         let unmoved = w.get("x").and_then(Value::as_f64).unwrap_or(0.0) == 0.0
             && w.get("y").and_then(Value::as_f64).unwrap_or(0.0) == 0.0;
@@ -295,7 +295,7 @@ fn lunar_profile(profile: &str, mods: &Value, scan: &mut Scan) {
     push(scan, Launcher::Lunar, profile, values, unsure, Vec::new());
 }
 
-/// Arctic's one-line widgets: 13 px tall, stacked 2 px apart, kept 4 px
+/// RICO's one-line widgets: 13 px tall, stacked 2 px apart, kept 4 px
 /// from the screen edge (the mod's TextWidget, Hud.GAP and Hud.MARGIN).
 const TEXT_WIDGETS: [&str; 13] = [
     "fps",
@@ -317,7 +317,7 @@ const ROW: i64 = 13 + 2;
 type Column = (i64, i64, i64);
 const MARGIN: i64 = 4;
 
-/// Clients stack text lines closer than Arctic's boxes (LabyMod: 10 px), so
+/// Clients stack text lines closer than RICO's boxes (LabyMod: 10 px), so
 /// one-line widgets pinned in the same column are pushed apart just enough
 /// not to overlap, in their order, and kept off the very edge.
 fn restack(hud: &mut Map<String, Value>) {
@@ -445,7 +445,7 @@ fn slot(enabled: bool, place: Option<Anchor>, scale: f64, background: bool) -> V
 }
 
 /// `TOP_LEFT`, `topRight`, `middle_left`, `bottomCenterLeft`… plus the
-/// offset from that area, as Arctic's anchor and inward offsets.
+/// offset from that area, as RICO's anchor and inward offsets.
 fn anchor(area: &str, x: f64, y: f64) -> Anchor {
     let a = area.to_ascii_lowercase().replace(['_', '-'], "");
     let ay = if a.starts_with("top") {

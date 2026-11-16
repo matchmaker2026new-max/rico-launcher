@@ -1,4 +1,4 @@
-//! Replays of an instance: what the Arctic Client kept (press the replay
+//! Replays of an instance: what the RICO Client kept (press the replay
 //! key in game). Watch one (the game starts straight into it), open the
 //! folder, or move one to trash.
 

@@ -10,7 +10,7 @@ import com.arcticlauncher.client.style.Style;
 /**
  * Small pop-ups in the top-right corner: a friend's message, an invite, a
  * screenshot just taken (with its picture). Drawn over the game and over
- * Arctic's menus; each slides in, stays a few seconds, then slides out and fades (a click
+ * RICO's menus; each slides in, stays a few seconds, then slides out and fades (a click
  * closes it the same way).
  */
 public final class Notices {

@@ -20,7 +20,7 @@ public final class HudStyles {
 
 	private HudStyles() {}
 
-	/** Set every widget to the preset {@code id}, using {@code s} for the Arctic colors. */
+	/** Set every widget to the preset {@code id}, using {@code s} for the RICO colors. */
 	public static void apply(String id, Hud hud, Style s) {
 		for (HudWidget w : hud.widgets()) {
 			apply(id, hud.slot(w), s);

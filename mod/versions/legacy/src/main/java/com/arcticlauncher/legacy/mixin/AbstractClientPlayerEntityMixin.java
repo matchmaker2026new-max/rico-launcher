@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Shows the player's Arctic look: skin (with arm model) and cape.
+ * Shows the player's RICO look: skin (with arm model) and cape.
  *
  * <p>Legacy Yarn has these two names the wrong way round (1.8.9 to 1.12.2): {@code getCapeId} is the
  * skin (the player renderer draws the body with it) and {@code getSkinId} is the cape (the cape layer

@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Arctic looks: every player picks their own skin and cape and publishes
+ * RICO looks: every player picks their own skin and cape and publishes
  * it; this shows everyone's. Lookups are batched and cached, and nothing
  * here ever blocks the render thread.
  *
@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class Looks {
 	private static final long TTL_MS = TimeUnit.MINUTES.toMillis(10);
 	/**
-	 * Someone not on Arctic is asked about again this soon: a player who just joined checks in
+	 * Someone not on RICO is asked about again this soon: a player who just joined checks in
 	 * a few seconds after you first see them, and the first answer would otherwise hide their
 	 * snowflake for the whole {@link #TTL_MS}.
 	 */
@@ -95,7 +95,7 @@ public final class Looks {
 	private final Cosmetics cosmetics;
 	private volatile String token;
 	/**
-	 * The launcher was still signing in to Arctic when the game started (a slow server): the token comes into
+	 * The launcher was still signing in to RICO when the game started (a slow server): the token comes into
 	 * the session file later and is read from there. Off after an account switch, which sets the token itself.
 	 */
 	private volatile boolean waitingForLauncher;
@@ -215,7 +215,7 @@ public final class Looks {
 
 	/**
 	 * What this client knows about looks, in plain lines (the "Cosmetics check" page): whether
-	 * it's signed in to Arctic, which UUID it is in the world as, and what it found for the
+	 * it's signed in to RICO, which UUID it is in the world as, and what it found for the
 	 * players it has asked about.
 	 */
 	public List<String> diagnostics() {
@@ -299,12 +299,12 @@ public final class Looks {
 		return baseUrl;
 	}
 
-	/** The Arctic sign-in the launcher gave (null without one). */
+	/** The RICO sign-in the launcher gave (null without one). */
 	public String token() {
 		return token;
 	}
 
-	/** Register a picture of Arctic's own (a chat screenshot…) as {@code look:<hash>}. */
+	/** Register a picture of RICO's own (a chat screenshot…) as {@code look:<hash>}. */
 	public void registerOwn(String hash, byte[] png) {
 		platform.registerTexture(hash, png, false);
 	}
@@ -364,7 +364,7 @@ public final class Looks {
 
 	// ---- Rendering side -----------------------------------------------------
 
-	/** The player's Arctic look, or null. Queues lookups as needed. */
+	/** The player's RICO look, or null. Queues lookups as needed. */
 	public Look lookFor(UUID player) {
 		// Asked for every player every frame: the UUID's text only when someone is hidden.
 		if (!config.showCosmetics || !config.hiddenPlayers.isEmpty() && config.hiddenPlayers.contains(player.toString())) {
@@ -400,7 +400,7 @@ public final class Looks {
 	}
 
 	/**
-	 * {@link #lookFor(UUID)}, and for a player with no cape of Arctic's, their OptiFine cape (by name) when
+	 * {@link #lookFor(UUID)}, and for a player with no cape of RICO's, their OptiFine cape (by name) when
 	 * that setting is on.
 	 */
 	public Look lookFor(UUID player, String name) {
@@ -419,7 +419,7 @@ public final class Looks {
 				: new Look(look.skin, look.slim, hash, look.cosmetics, look.arctic, look.fetched, look.fits);
 	}
 
-	/** A cape from somewhere other than Arctic's server (OptiFine's): registered, never downloaded from the server. */
+	/** A cape from somewhere other than RICO's server (OptiFine's): registered, never downloaded from the server. */
 	void adoptCape(String hash, byte[] png) {
 		capes.add(hash);
 		loading.add(hash);
@@ -430,7 +430,7 @@ public final class Looks {
 		platform.log(false, message);
 	}
 
-	/** Whether this player is playing with Arctic (from the lookup cache; queues one if needed). */
+	/** Whether this player is playing with RICO (from the lookup cache; queues one if needed). */
 	public boolean isArctic(UUID player) {
 		Look look = players.get(player);
 		if (look == null || System.currentTimeMillis() - look.fetched > othersTtl(look)) {
@@ -444,7 +444,7 @@ public final class Looks {
 	}
 
 	/**
-	 * Another account's Arctic session (after an in-game account switch);
+	 * Another account's RICO session (after an in-game account switch);
 	 * null means none, so looks can't be changed until relaunching.
 	 */
 	public void useSession(String newToken) {
@@ -488,7 +488,7 @@ public final class Looks {
 		return true;
 	}
 
-	/** Whether a player is known to be on Arctic (cache only, no lookup). */
+	/** Whether a player is known to be on RICO (cache only, no lookup). */
 	private boolean knownArctic(UUID player) {
 		Look look = players.get(player);
 		return look != null && look.arctic;

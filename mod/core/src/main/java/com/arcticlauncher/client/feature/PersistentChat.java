@@ -599,14 +599,14 @@ public final class PersistentChat {
 				public void run() {
 					loop();
 				}
-			}, "Arctic chat history");
+			}, "RICO chat history");
 			thread.setDaemon(true);
 			thread.start();
 			Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
 				public void run() {
 					drain(2);
 				}
-			}, "Arctic chat history flush"));
+			}, "RICO chat history flush"));
 		}
 
 		private void loop() {

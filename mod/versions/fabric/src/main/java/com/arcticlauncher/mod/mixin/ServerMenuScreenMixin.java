@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * The game's own multiplayer and disconnect screens never get a frame: Arctic's takes their place
+ * The game's own multiplayer and disconnect screens never get a frame: RICO's takes their place
  * as they open (the per-tick swap alone showed the native one for a moment first).
  */
 //#if MC >= 26.2

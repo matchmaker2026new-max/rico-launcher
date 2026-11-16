@@ -139,7 +139,7 @@ const MARK_TEXTURE: u32 = 160;
 /// Tip of the mark's arms, as a fraction of the icon's size.
 const MARK_TIP: f32 = 0.46;
 
-/// The Arctic mark (same art as the window and .exe icon), with its arms
+/// The RICO mark (same art as the window and .exe icon), with its arms
 /// reaching `radius` from `center`, turned by `rotation` radians.
 pub fn brand_mark(
     ctx: &egui::Context,

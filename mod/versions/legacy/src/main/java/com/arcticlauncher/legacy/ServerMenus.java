@@ -10,7 +10,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.DisconnectedScreen;
 import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
 
-/** Arctic's browser is the default; the native list is an explicit, per-screen choice. */
+/** RICO's browser is the default; the native list is an explicit, per-screen choice. */
 public final class ServerMenus {
 	private static final Set<Screen> VANILLA = Collections.newSetFromMap(new WeakHashMap<Screen, Boolean>());
 	/** The player picked the game's own server list: its disconnect screen stays the game's too. */
@@ -32,7 +32,7 @@ public final class ServerMenus {
 				&& !VANILLA.contains(screen);
 	}
 
-	/** A native screen is about to open: Arctic's takes its place without the native one showing first. */
+	/** A native screen is about to open: RICO's takes its place without the native one showing first. */
 	public static boolean intercept(Screen screen) {
 		if (!prefersArctic(screen)) {
 			return false;

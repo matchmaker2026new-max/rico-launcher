@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-/** Every vanilla button gets the Arctic style's background (sliders a track). */
+/** Every vanilla button gets the RICO style's background (sliders a track). */
 @Mixin(ButtonWidget.class)
 abstract class ButtonWidgetMixin implements com.arcticlauncher.legacy.LegacyButtonBounds {
 	private static final int DANGER = 0xFFF87171;
@@ -38,7 +38,7 @@ abstract class ButtonWidgetMixin implements com.arcticlauncher.legacy.LegacyButt
 	private static final String RENDER = "render";
 	//#endif
 
-	/** The left half of the texture: draw the whole Arctic button instead. */
+	/** The left half of the texture: draw the whole RICO button instead. */
 	@Redirect(method = RENDER, at = @At(value = "INVOKE",
 			target = "Lnet/minecraft/client/gui/widget/ButtonWidget;drawTexture(IIIIII)V", ordinal = 0))
 	private void arctic$left(ButtonWidget self, int x0, int y0, int u, int v, int w, int h) {

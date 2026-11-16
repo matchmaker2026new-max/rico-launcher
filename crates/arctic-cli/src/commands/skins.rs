@@ -172,7 +172,7 @@ fn find(library: &Library, query: &str) -> Result<SkinEntry> {
         })
 }
 
-/// Put a skin on as the Arctic look (`None`: back to the Minecraft skin),
+/// Put a skin on as the RICO look (`None`: back to the Minecraft skin),
 /// keeping the cape and cosmetics.
 fn wear(ctx: &Ctx, account: Option<&str>, skin: Option<(Vec<u8>, Variant, String)>) -> Result<()> {
     let account = fresh_account(ctx, account)?;

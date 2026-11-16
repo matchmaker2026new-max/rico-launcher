@@ -1,7 +1,7 @@
 package com.arcticlauncher.client.config;
 
 /**
- * A SOCKS5 or HTTP proxy for server connections and Arctic's own web requests.
+ * A SOCKS5 or HTTP proxy for server connections and RICO's own web requests.
  * Set in the launcher (passed in the session file) or in game.
  */
 public final class ProxyConfig {

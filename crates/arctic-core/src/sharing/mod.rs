@@ -1,7 +1,7 @@
 //! Sharing and backups: an instance (as a mod list), a HUD layout, a
-//! crosshair, all Arctic Client settings, or a whole profile, as a small
+//! crosshair, all RICO Client settings, or a whole profile, as a small
 //! JSON bundle. A bundle travels as a `.json` file, one line of text
-//! (`arctic1.…`) or a short code stored on the Arctic server.
+//! (`arctic1.…`) or a short code stored on the RICO server.
 //!
 //! Account data never goes in a bundle, and neither do Java paths or JVM
 //! flags (they could run programs on the other PC). Every bundle read is

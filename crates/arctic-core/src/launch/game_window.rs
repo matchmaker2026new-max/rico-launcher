@@ -1,6 +1,6 @@
-//! "Start the game maximized": Minecraft has no option for it. The Arctic Client maximizes its
+//! "Start the game maximized": Minecraft has no option for it. The RICO Client maximizes its
 //! own window (every system, see its WindowMaximizeMixin); the launcher also asks the system to
-//! maximize the game's window, which covers games without the Arctic Client and LWJGL 2
+//! maximize the game's window, which covers games without the RICO Client and LWJGL 2
 //! (1.8.9-1.12.2), which can't do it itself: on Windows directly, on Linux through the X11
 //! window manager (Xorg, and XWayland under Wayland). On macOS the client does it alone.
 //! On Windows the same watcher also brings the game forward, whether maximized or not.
@@ -13,7 +13,7 @@ const WATCH_FOR: Duration = Duration::from_secs(180);
 #[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
 const POLL: Duration = Duration::from_millis(150);
 
-/// The JVM flag that tells the Arctic Client to maximize its window.
+/// The JVM flag that tells the RICO Client to maximize its window.
 pub const CLIENT_FLAG: &str = "-Darctic.maximized=true";
 
 /// Hand the foreground to the game at spawn, then focus/maximize its window once it opens.
@@ -139,7 +139,7 @@ mod imp {
     const MAX_DEPTH: u8 = 3;
 
     pub fn watch(pid: u32) {
-        // Without an X server (a Wayland-only session) only the Arctic Client can do it.
+        // Without an X server (a Wayland-only session) only the RICO Client can do it.
         if std::env::var_os("DISPLAY").is_none() {
             return;
         }

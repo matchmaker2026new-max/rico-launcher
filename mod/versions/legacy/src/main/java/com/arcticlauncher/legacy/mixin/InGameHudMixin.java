@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/** Arctic's HUD widgets (and its crosshair, instead of the game's when on). */
+/** RICO's HUD widgets (and its crosshair, instead of the game's when on). */
 @Mixin(InGameHud.class)
 abstract class InGameHudMixin {
 	/** Hide titles: the big title and subtitle never show. */

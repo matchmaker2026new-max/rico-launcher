@@ -10,7 +10,7 @@ public final class ArcticButton {
 
 	private static final java.util.Set<Button> OWN = java.util.Collections.newSetFromMap(new java.util.WeakHashMap<Button, Boolean>());
 	private static final java.util.Set<Button> MAIN = java.util.Collections.newSetFromMap(new java.util.WeakHashMap<Button, Boolean>());
-	/** The numbers of Arctic's buttons on 1.13, clear of the game's own. */
+	/** The numbers of RICO's buttons on 1.13, clear of the game's own. */
 	private static final int OWN_IDS = 9500;
 	private static final java.util.Map<net.minecraft.client.gui.screens.Screen, Runnable> TICKS = new java.util.WeakHashMap<>();
 

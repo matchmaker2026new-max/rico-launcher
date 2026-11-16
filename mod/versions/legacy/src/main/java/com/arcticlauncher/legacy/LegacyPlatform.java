@@ -258,7 +258,7 @@ public final class LegacyPlatform implements Platform {
 
 	@Override
 	public void scrollScreen(double amount) {
-		// Only Arctic's screens: the game's read the wheel straight from LWJGL.
+		// Only RICO's screens: the game's read the wheel straight from LWJGL.
 		if (mc().currentScreen instanceof LegacyPageScreen) {
 			((LegacyPageScreen) mc().currentScreen).scrollBy(amount > 0 ? 1 : -1);
 		}
@@ -1426,7 +1426,7 @@ public final class LegacyPlatform implements Platform {
 		if (page instanceof com.arcticlauncher.client.menu.TitleMenu) {
 			mc().setScreen(new TitleScreen()); return;
 		}
-		// One Arctic page replaces another, so Escape goes back to what was
+		// One RICO page replaces another, so Escape goes back to what was
 		// under the menu instead of through every page visited.
 		Screen current = mc().currentScreen;
 		Screen under = current instanceof LegacyPageScreen ? ((LegacyPageScreen) current).parent() : current;

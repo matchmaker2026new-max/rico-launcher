@@ -68,7 +68,7 @@ MANIFEST = (
 MCMOD_INFO = (
     '[{"modid": "arctic", "name": "RICO Client", "version": "1.0.0", '
     '"description": "RICO\'s Minecraft client: menus, HUD widgets, friends and more.", '
-    '"url": "https://arcticlauncher.com", "authorList": ["RICO contributors"]}]\n'
+    '"url": "https://github.com/matchmaker2026new-max/rico-launcher", "authorList": ["RICO contributors"]}]\n'
 )
 
 

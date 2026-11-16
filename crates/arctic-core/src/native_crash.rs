@@ -40,7 +40,7 @@ fn parse(text: &str, pid: u32) -> Option<Fault> {
             .split(',')
             .next()?
             .trim();
-        if !["javaw.exe", "java.exe", "Arctic Client.exe"]
+        if !["javaw.exe", "java.exe", "RICO Client.exe"]
             .iter()
             .any(|name| app.eq_ignore_ascii_case(name))
         {
@@ -172,9 +172,9 @@ pub(crate) fn collect(pid: u32, exit: std::time::SystemTime, mods: &std::path::P
     match fault {
         Some(f) => {
             let owner = bundled_owner(mods, &f.module).map(|name| format!("; bundled mod={name}")).unwrap_or_default();
-            format!("[Arctic diagnostics] native fault: module={}; version={}; exception={}; offset={}", f.module, f.version, f.exception, f.offset) + &owner
+            format!("[RICO diagnostics] native fault: module={}; version={}; exception={}; offset={}", f.module, f.version, f.exception, f.offset) + &owner
         },
-        None => "[Arctic diagnostics] native fault: no matching Application Error 1000 captured (unavailable, delayed, or query timed out); cause unknown".into(),
+        None => "[RICO diagnostics] native fault: no matching Application Error 1000 captured (unavailable, delayed, or query timed out); cause unknown".into(),
     }
 }
 
@@ -207,7 +207,7 @@ mod tests {
     }
     #[test]
     fn application_error_1000() {
-        let text = "Event[0]:\n  Event ID: 1000\n  Description:\nFaulting application name: Arctic Client.exe, version: 21.0.1.0, time stamp: 0x123\nFaulting module name: C:\\Users\\Alice\\nvoglv64.dll, version: 32.0.15.8266, time stamp: 0x456\nException code: 0xc0000409\nFault offset: 0x0000000000123456\nFaulting process id: 0x1234\nFaulting application path: C:\\Users\\Alice\\Arctic Client.exe";
+        let text = "Event[0]:\n  Event ID: 1000\n  Description:\nFaulting application name: RICO Client.exe, version: 21.0.1.0, time stamp: 0x123\nFaulting module name: C:\\Users\\Alice\\nvoglv64.dll, version: 32.0.15.8266, time stamp: 0x456\nException code: 0xc0000409\nFault offset: 0x0000000000123456\nFaulting process id: 0x1234\nFaulting application path: C:\\Users\\Alice\\RICO Client.exe";
         let f = parse(text, 0x1234).unwrap();
         assert_eq!(
             f,
@@ -221,7 +221,7 @@ mod tests {
         assert!(parse(text, 99).is_none());
         let other = text.replace("0x1234", "0x9999");
         assert_eq!(parse(&format!("{other}\n{text}"), 0x1234), Some(f));
-        assert!(parse(&text.replace("Arctic Client.exe", "other.exe"), 0x1234).is_none());
+        assert!(parse(&text.replace("RICO Client.exe", "other.exe"), 0x1234).is_none());
         assert!(parse("unavailable", 0x1234).is_none());
     }
 }

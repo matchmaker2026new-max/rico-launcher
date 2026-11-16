@@ -21,7 +21,7 @@ import java.util.zip.Inflater;
 /**
  * HUD layouts and crosshairs as share bundles, the same format the launcher
  * uses ({@code {"arctic_share":1,"kind":…,"data":…}}): as a short code on
- * the Arctic server or one line of {@code arctic1.} text. Every bundle read
+ * the RICO server or one line of {@code arctic1.} text. Every bundle read
  * is checked value by value (the same limits as the launcher and the
  * in-game editors) before anything changes.
  */

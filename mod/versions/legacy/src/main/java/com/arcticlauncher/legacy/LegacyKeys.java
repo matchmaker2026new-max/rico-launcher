@@ -9,7 +9,7 @@ import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 
 /**
- * Keys on old Minecraft (LWJGL 2): Arctic's settings name keys the modern
+ * Keys on old Minecraft (LWJGL 2): RICO's settings name keys the modern
  * way ("key.keyboard.c", "key.mouse.left") so they carry across versions;
  * here those names become LWJGL 2 key codes (mouse buttons are -100 + n,
  * as Minecraft 1.8 stores them) and back.
@@ -50,17 +50,17 @@ public final class LegacyKeys {
 	private LegacyKeys() {}
 
 	/** LWJGL 2 code for a modern key name; 0 for none/unknown. */
-	/** The key press Arctic last used while playing (its key and time), so the screen it opened doesn't get it too. */
+	/** The key press RICO last used while playing (its key and time), so the screen it opened doesn't get it too. */
 	private static int usedKey = -1;
 	private static long usedAt;
 
-	/** Arctic used this key press (the current keyboard event). */
+	/** RICO used this key press (the current keyboard event). */
 	public static void used(int key, long nanos) {
 		usedKey = key;
 		usedAt = nanos;
 	}
 
-	/** Whether this key press is the one Arctic already used. */
+	/** Whether this key press is the one RICO already used. */
 	public static boolean usedByArctic(int key, long nanos) {
 		return key == usedKey && nanos == usedAt;
 	}

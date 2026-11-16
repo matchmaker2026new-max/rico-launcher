@@ -4,7 +4,7 @@ import java.util.Locale;
 
 /**
  * Features some servers ban. They stay on everywhere else; on these servers
- * they're off, so nobody gets banned (and Arctic doesn't get blocked) for
+ * they're off, so nobody gets banned (and RICO doesn't get blocked) for
  * using them.
  */
 public final class ServerRules {

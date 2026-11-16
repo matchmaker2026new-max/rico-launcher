@@ -3,7 +3,7 @@ package com.arcticlauncher.client.gfx;
 import com.arcticlauncher.client.style.Style;
 
 /**
- * The animated Arctic night behind menus: sky, aurora, stars, moon,
+ * The animated RICO night behind menus: sky, aurora, stars, moon,
  * mountains and falling snow, matching the launcher. Everything is
  * computed from the clock, so there's no state to keep.
  */

@@ -8,7 +8,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
 /**
- * Sharing from the menu, off the game thread: a code from the Arctic
+ * Sharing from the menu, off the game thread: a code from the RICO
  * server (falling back to text on the clipboard when it can't be reached),
  * and using a pasted code or text.
  */

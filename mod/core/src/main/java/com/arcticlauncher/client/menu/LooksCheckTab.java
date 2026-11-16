@@ -5,7 +5,7 @@ import com.arcticlauncher.client.ui.Button;
 import java.util.List;
 
 /**
- * "Why can't others see my look?": whether this game is signed in to Arctic, the UUID it is in
+ * "Why can't others see my look?": whether this game is signed in to RICO, the UUID it is in
  * the world as (what other players look you up by), when it last checked in, and what it found
  * for the players it has looked up.
  */

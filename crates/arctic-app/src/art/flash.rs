@@ -1,4 +1,4 @@
-//! Flash Hosting's mark (Arctic's supporter): an amber tile with a dark
+//! Flash Hosting's mark (RICO's supporter): an amber tile with a dark
 //! isometric block and an amber lightning bolt struck through it, drawn
 //! from the same outline as their site's icon (icon.svg, viewBox 0..32).
 

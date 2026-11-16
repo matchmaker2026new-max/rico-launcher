@@ -68,7 +68,7 @@
   "replay.nothing_to_save_yet": "还没有可保存的内容",
   "replay.nothing_was_recorded": "没有录到任何内容。",
   "replay.older_clips_have_3d_data_only_render_them": "较旧的片段只有 3D 数据。如有需要，请在回放编辑器中渲染。",
-  "replay.open_arctic_launcher_to_add_ffmpeg": "打开 Arctic Launcher 以添加 FFmpeg",
+  "replay.open_arctic_launcher_to_add_ffmpeg": "打开 RICO Launcher 以添加 FFmpeg",
   "replay.open_it_from_an_instance_of_that_version": "。请从该版本的实例中打开。",
   "replay.open_videos_folder": "打开视频文件夹",
   "replay.opening_replay": "正在打开回放",

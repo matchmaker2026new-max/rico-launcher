@@ -49,7 +49,7 @@ public final class ToggleKeys {
 		stale = true;
 	}
 
-	/** Who else uses this key (another Arctic toggle key or a game key binding), or null. For the settings page only. */
+	/** Who else uses this key (another RICO toggle key or a game key binding), or null. For the settings page only. */
 	static String usedBy(Mod mod, String key) {
 		if (!bound(key)) {
 			return null;
@@ -59,17 +59,17 @@ public final class ToggleKeys {
 			if (!e.getKey().equals(mod.id) && key.equals(e.getValue())) {
 				for (Mod other : ModCatalog.all()) {
 					if (other.id.equals(e.getKey())) {
-						return other.name + " (Arctic)";
+						return other.name + " (RICO)";
 					}
 				}
-				return e.getKey() + " (Arctic)";
+				return e.getKey() + " (RICO)";
 			}
 		}
 		if (key.equals(c.fullbrightKey)) {
-			return "Fullbright (Arctic)";
+			return "Fullbright (RICO)";
 		}
 		if (key.equals(c.streamerKey)) {
-			return "Streamer Mode (Arctic)";
+			return "Streamer Mode (RICO)";
 		}
 		return ArcticClient.platform().keyUsedBy(key);
 	}

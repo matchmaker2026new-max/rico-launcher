@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Before each client tick: Arctic reads its keys and applies toggles. */
+/** Before each client tick: RICO reads its keys and applies toggles. */
 @Mixin(Minecraft.class)
 abstract class MinecraftTickMixin {
 	@Inject(method = "tick", at = @At("HEAD"))

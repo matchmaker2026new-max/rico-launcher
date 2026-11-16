@@ -28,7 +28,7 @@ pub fn run(ctx: &Ctx, args: &BedrockArgs) -> Result<i32> {
     match &args.command {
         BedrockCommand::Status => status(ctx, edition),
         BedrockCommand::Play => {
-            // No third-party clients for now: Arctic is building its own.
+            // No third-party clients for now: RICO is building its own.
             let loading = bedrock::launch_with_client(&ctx.dirs, edition, None, |message| {
                 eprintln!("{message}")
             })?;

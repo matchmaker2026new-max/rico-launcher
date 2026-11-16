@@ -21,7 +21,7 @@ import net.minecraft.resources.Identifier;
 
 /**
  * The server's Simple Voice Chat secret goes to voice chat; a server that lists {@code arctic:hello}
- * gets Arctic's hello; its other messages are dropped quietly.
+ * gets RICO's hello; its other messages are dropped quietly.
  */
 //#if MC >= 1.20.2
 @Mixin(ClientCommonPacketListenerImpl.class)

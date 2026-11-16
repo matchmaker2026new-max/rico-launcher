@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
 
-/// Arctic Launcher from the command line: list, install and launch vanilla
+/// RICO Launcher from the command line: list, install and launch vanilla
 /// Minecraft, manage accounts, and open the launcher.
 #[derive(Debug, Parser)]
 #[command(name = "arctic", version, about, long_about = None)]
@@ -55,9 +55,9 @@ pub enum Command {
         /// Version id, `latest` or `latest-snapshot`.
         version: String,
     },
-    /// Show where Arctic keeps its files.
+    /// Show where RICO keeps its files.
     Paths,
-    /// Where Arctic keeps everything, and moving it to another folder or drive.
+    /// Where RICO keeps everything, and moving it to another folder or drive.
     #[command(subcommand)]
     Storage(StorageCommand),
     /// Check GitHub for a newer launcher release.
@@ -89,7 +89,7 @@ pub enum Command {
     /// An instance's singleplayer worlds: list, import, back up, remove.
     #[command(subcommand)]
     Worlds(WorldsCommand),
-    /// Arctic Client waypoints (per world; the game shows them on its Compass).
+    /// RICO Client waypoints (per world; the game shows them on its Compass).
     #[command(subcommand)]
     Waypoints(WaypointsCommand),
     /// Saved multiplayer servers: who's online, ping and MOTD. Join one
@@ -109,7 +109,7 @@ pub enum Command {
     /// Your Minecraft skin and capes (what every server shows).
     #[command(subcommand)]
     Skin(SkinCommand),
-    /// Your Arctic look: skin, cape and cosmetics other Arctic players see.
+    /// Your RICO look: skin, cape and cosmetics other RICO players see.
     #[command(subcommand)]
     Look(LookCommand),
     /// Your skin library (the Cosmetics tab's skins) and the community gallery.
@@ -118,7 +118,7 @@ pub enum Command {
     /// Screenshots from every instance.
     #[command(subcommand)]
     Screenshots(ScreenshotsCommand),
-    /// Saved replays (Arctic Client). Watch one with `arctic launch --replay FILE`.
+    /// Saved replays (RICO Client). Watch one with `arctic launch --replay FILE`.
     #[command(subcommand)]
     Replays(ReplaysCommand),
     /// Show an instance's last game log, or the launcher's.
@@ -477,7 +477,7 @@ pub enum BedrockWorldsCommand {
         #[arg(long)]
         to: Option<PathBuf>,
     },
-    /// Save a .mcworld copy in Arctic's Bedrock backups folder.
+    /// Save a .mcworld copy in RICO's Bedrock backups folder.
     Backup { world: String },
     /// Move a world to com.mojangrctic-trash (kept, not deleted).
     Remove { world: String },
@@ -567,7 +567,7 @@ pub enum ServersCommand {
         /// Up to 5 (`--tag smp --tag pvp`).
         #[arg(long = "tag")]
         tags: Vec<String>,
-        /// Sign in to Arctic as this account (default: the active one).
+        /// Sign in to RICO as this account (default: the active one).
         #[arg(short, long)]
         account: Option<String>,
     },
@@ -644,7 +644,7 @@ pub enum LookCommand {
         #[arg(long)]
         account: Option<String>,
     },
-    /// Use a skin PNG for Arctic players, or `none` for your Minecraft skin.
+    /// Use a skin PNG for RICO players, or `none` for your Minecraft skin.
     Skin {
         file: std::path::PathBuf,
         #[arg(long, value_enum)]
@@ -760,7 +760,7 @@ pub enum ShareWhat {
     /// HUD layout: which widgets are on, where, and how big.
     Hud,
     Crosshair,
-    /// All Arctic Client settings: HUD, crosshair, style, features, keys.
+    /// All RICO Client settings: HUD, crosshair, style, features, keys.
     Client,
     /// Launcher settings, every instance and its client settings.
     Profile,
@@ -816,7 +816,7 @@ pub enum StorageCommand {
     /// Copy everything to an empty folder and use it from now on (`default`: back to the
     /// usual place). The old copy is removed when the launcher next starts.
     Move { folder: String },
-    /// Use a folder that already has Arctic's files (nothing is copied or removed).
+    /// Use a folder that already has RICO's files (nothing is copied or removed).
     Use { folder: String },
 }
 
@@ -899,7 +899,7 @@ pub struct InstanceEditArgs {
     /// Icon color as `#rrggbb`, or `default` for the theme's.
     #[arg(long)]
     pub color: Option<String>,
-    /// Arctic Client (Fabric and Quilt instances).
+    /// RICO Client (Fabric and Quilt instances).
     #[arg(long, value_enum)]
     pub arctic_client: Option<Switch>,
     /// Java executable, or `default` for the launcher's choice.
@@ -995,7 +995,7 @@ pub enum SkinsCommand {
         skin: String,
         file: std::path::PathBuf,
     },
-    /// Wear a library skin as your Arctic look (`none`: your Minecraft skin).
+    /// Wear a library skin as your RICO look (`none`: your Minecraft skin).
     Wear {
         /// Skin id or name, or `none`.
         skin: String,
@@ -1240,7 +1240,7 @@ pub struct LaunchArgs {
     #[arg(long, value_name = "FOLDER")]
     pub world: Option<String>,
 
-    /// Watch this replay (an .mcpr file) once the game is up (Arctic Client).
+    /// Watch this replay (an .mcpr file) once the game is up (RICO Client).
     #[arg(long, value_name = "FILE", conflicts_with_all = ["server", "world"])]
     pub replay: Option<std::path::PathBuf>,
 

@@ -29,7 +29,7 @@ pub mod notes;
 
 pub use notes::ReleaseNotes;
 
-pub const GITHUB_REPO: &str = "brksfrb/arctic-launcher";
+pub const GITHUB_REPO: &str = "matchmaker2026new-max/rico-launcher";
 /// Flatpak owns the installed executable and updates it through its signed repository.
 pub fn managed_by_flatpak() -> bool {
     cfg!(target_os = "linux") && std::path::Path::new("/.flatpak-info").is_file()

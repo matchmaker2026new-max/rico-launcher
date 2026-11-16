@@ -8,7 +8,7 @@ import net.minecraft.client.gui.components.toasts.ToastManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
-/** Which toast slots Minecraft is using, so Arctic's pop-ups go below them. */
+/** Which toast slots Minecraft is using, so RICO's pop-ups go below them. */
 @Mixin(ToastManager.class)
 public interface ToastManagerAccess {
 	@Accessor("occupiedSlots")

@@ -6,7 +6,7 @@ import net.minecraft.client.gui.AchievementNotification;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
-/** Whether Minecraft's achievement pop-up is showing, so Arctic's go below it. */
+/** Whether Minecraft's achievement pop-up is showing, so RICO's go below it. */
 @Mixin(AchievementNotification.class)
 public interface AchievementNotificationAccess {
 	@Accessor("achievement")

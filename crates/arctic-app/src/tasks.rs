@@ -136,7 +136,7 @@ pub enum Event {
     SkinAccount(String, Outcome<crate::skin_tasks::AccountSkin>),
     /// Another player's skin by name.
     PlayerSkin(String, Outcome<(Vec<u8>, arctic_core::skins::Variant)>),
-    /// The Arctic look of an account (account id, result).
+    /// The RICO look of an account (account id, result).
     ArcticLook(String, Outcome<crate::skin_tasks::ArcticState>),
     /// Public capes and cosmetics, available without an account.
     ArcticCatalog(Outcome<crate::skin_tasks::ArcticState>),
@@ -576,7 +576,7 @@ impl Tasks {
         });
     }
 
-    /// Look for newer builds of the mods Arctic installed into `instance`.
+    /// Look for newer builds of the mods RICO installed into `instance`.
     pub fn mod_updates_check(&self, instance: Instance) {
         self.run(move |t| {
             let result = match instance.loader.kind() {

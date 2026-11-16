@@ -62,19 +62,19 @@ pub enum QuickPlay {
     Server(String),
     /// A world's folder name in `saves`.
     World(String),
-    /// Start a duel from the title screen (Arctic Client): a flat arena
+    /// Start a duel from the title screen (RICO Client): a flat arena
     /// with this kit, shared through Play together, with this friend
-    /// (Arctic id, name) invited.
+    /// (RICO id, name) invited.
     Duel {
         kit: String,
         friend: Option<(String, String)>,
     },
-    /// Watch a replay (an `.mcpr` file) from the title screen (Arctic Client).
+    /// Watch a replay (an `.mcpr` file) from the title screen (RICO Client).
     Replay(PathBuf),
 }
 
 impl QuickPlay {
-    /// What the Arctic Client reads from its session file for a replay.
+    /// What the RICO Client reads from its session file for a replay.
     pub fn replay_json(&self) -> Option<serde_json::Value> {
         let QuickPlay::Replay(file) = self else {
             return None;
@@ -82,7 +82,7 @@ impl QuickPlay {
         Some(serde_json::json!({ "file": file, "at": unix_now() }))
     }
 
-    /// What the Arctic Client reads from its session file for a duel.
+    /// What the RICO Client reads from its session file for a duel.
     pub fn duel_json(&self) -> Option<serde_json::Value> {
         let QuickPlay::Duel { kit, friend } = self else {
             return None;
@@ -399,7 +399,7 @@ pub fn prepare(req: &LaunchRequest, progress: Progress) -> Result<LaunchPlan> {
     let game_dir = req.instance.game_dir(dirs);
     let repair = files::LibraryRepair::new(dirs)?;
     let mut timer = StepTimer::new();
-    // The Arctic session (a network round trip) is fetched while the game files are checked.
+    // The RICO session (a network round trip) is fetched while the game files are checked.
     let mut share_session = false;
     // First start of this game folder: the profile's default game settings.
     match crate::game_defaults::Defaults::load(dirs)
@@ -469,7 +469,7 @@ pub fn prepare(req: &LaunchRequest, progress: Progress) -> Result<LaunchPlan> {
                 loaders::LoaderKind::Fabric | loaders::LoaderKind::Quilt
             ) {
                 // An older Fabric Loader than the mod needs would stop the
-                // game at startup: play without the Arctic Client then.
+                // game at startup: play without the RICO Client then.
                 let fits = kind != loaders::LoaderKind::Fabric
                     || arctic_mod::loader_fits(&vanilla.id, loader_version);
                 if req.instance.arctic_mod && !fits {
@@ -518,7 +518,7 @@ pub fn prepare(req: &LaunchRequest, progress: Progress) -> Result<LaunchPlan> {
                 timer.step("performance mods");
                 share_session = req.instance.arctic_mod && arctic_mod::supports(&vanilla.id);
             } else if kind == loaders::LoaderKind::Forge {
-                // Forge instances: the Arctic Client's Forge build, where there is one (1.8.9).
+                // Forge instances: the RICO Client's Forge build, where there is one (1.8.9).
                 arctic_mod::sync_forge(
                     &game_dir.join("mods"),
                     &vanilla.id,
@@ -542,7 +542,7 @@ pub fn prepare(req: &LaunchRequest, progress: Progress) -> Result<LaunchPlan> {
         }
         _ => vanilla,
     };
-    // The Arctic sign-in (a network round trip) runs while the game files are checked.
+    // The RICO sign-in (a network round trip) runs while the game files are checked.
     let session = share_session.then(|| start_cosmetics_session(req, &game_dir));
     let installation =
         install_with_repair(dirs, version, &game_dir, java_override, progress, &repair)?;
@@ -594,7 +594,7 @@ impl StepTimer {
 }
 
 /// The loader to launch with. Vanilla instances run on Fabric, invisible
-/// to the player, for the Arctic Client (versions it supports) and the
+/// to the player, for the RICO Client (versions it supports) and the
 /// Performance mods (any version Fabric supports), unless both are off
 /// ("pure vanilla").
 fn effective_loader(
@@ -710,12 +710,12 @@ fn gc_flags<'a>(
     G1_FLAGS.iter().map(|f| (*f).to_owned()).collect()
 }
 
-/// How long Play waits for the Arctic sign-in after the game files are ready. A slow or unreachable Arctic
+/// How long Play waits for the RICO sign-in after the game files are ready. A slow or unreachable RICO
 /// server must not hold the game back; the sign-in goes on in the background and the game picks the token
 /// up from the session file when it lands.
 const SESSION_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
 
-/// Start telling the Arctic mod its menu style and letting it publish looks as this player, on a thread of
+/// Start telling the RICO mod its menu style and letting it publish looks as this player, on a thread of
 /// its own. The receiver gets a message when the session file is final.
 fn start_cosmetics_session(req: &LaunchRequest, game_dir: &Path) -> std::sync::mpsc::Receiver<()> {
     let (done, finished) = std::sync::mpsc::channel();
@@ -739,7 +739,7 @@ fn start_cosmetics_session(req: &LaunchRequest, game_dir: &Path) -> std::sync::m
     finished
 }
 
-/// Tell the Arctic mod its menu style and let it publish looks as this
+/// Tell the RICO mod its menu style and let it publish looks as this
 /// player. Best effort: without the cosmetics server the game still starts.
 /// The session file is written first without a token, so the game always finds a current one, and again
 /// when the sign-in has given a token.
@@ -801,7 +801,7 @@ pub fn plan(req: &LaunchRequest, inst: &Installation) -> LaunchPlan {
         let vars = HashMap::from([("path", path.display().to_string())]);
         substitute(template, &vars)
     });
-    // The Arctic Client loads the classes a start needs ahead of the game on other cores
+    // The RICO Client loads the classes a start needs ahead of the game on other cores
     // (see startup_cache); it must be there to do it.
     let preload_flags = match inst.version.java_version.as_ref() {
         Some(java) if req.instance.arctic_mod && arctic_mod::supports(&req.version.id) => {
@@ -931,7 +931,7 @@ fn quick_play(
             "quickPlaySingleplayer",
             folder,
         ),
-        // The game starts at its title screen; the Arctic Client does the rest.
+        // The game starts at its title screen; the RICO Client does the rest.
         QuickPlay::Duel { .. } | QuickPlay::Replay(_) => return,
     };
     if takes_placeholder(version, key) {

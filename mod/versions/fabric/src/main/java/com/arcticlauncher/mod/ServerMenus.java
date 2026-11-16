@@ -9,7 +9,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
 import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
 
-/** Arctic's browser is the default; the native list is an explicit, per-screen choice. */
+/** RICO's browser is the default; the native list is an explicit, per-screen choice. */
 public final class ServerMenus {
 	private static final Set<Screen> VANILLA = Collections.newSetFromMap(new WeakHashMap<Screen, Boolean>());
 	// Only the latest disconnect is kept (its page refers back to the screen, so a weak map would never let go).
@@ -35,7 +35,7 @@ public final class ServerMenus {
 	}
 
 	/**
-	 * A native server list or disconnect screen is about to open: show Arctic's instead, so the
+	 * A native server list or disconnect screen is about to open: show RICO's instead, so the
 	 * game's own screen is never on screen for a frame first. True when it took over.
 	 */
 	public static boolean intercept(Screen screen) {

@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Streamer mode: your name and the server address are hidden in every piece of text. And the Arctic
+ * Streamer mode: your name and the server address are hidden in every piece of text. And the RICO
  * badge: text that starts with its blank mark (player list, name tags) gets the snowflake picture in
  * that place.
  */

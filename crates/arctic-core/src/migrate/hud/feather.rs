@@ -1,7 +1,7 @@
 //! Feather (now Dawn) module profiles: `feather/configuration/profiles/
 //! <name>.json` in the game folder. A profile names a module preset (which
 //! mods are on) and keeps only what the player changed, per mod. Widgets
-//! nobody moved sit where Feather arranges them, so Arctic arranges them too.
+//! nobody moved sit where Feather arranges them, so RICO arranges them too.
 
 use std::path::{Path, PathBuf};
 
@@ -32,7 +32,7 @@ const FEATHER: &[(&str, &str)] = &[
     ("packdisplay", "pack"),
 ];
 
-/// HUD modules Arctic has no widget for (named when they're on).
+/// HUD modules RICO has no widget for (named when they're on).
 const OTHER_HUD: &[(&str, &str)] = &[
     ("itemInfo1", "Item Info"),
     ("itemCounter", "Item Counter"),

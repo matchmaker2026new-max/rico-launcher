@@ -1,6 +1,6 @@
 # Website SEO brief (for the "RICO Launcher website" session)
 
-Written 2026-10-16. Source: a read of the live site (arcticlauncher.com, its sitemap, robots.txt),
+Written 2026-10-16. Source: a read of the live site (github.com/matchmaker2026new-max/rico-launcher, its sitemap, robots.txt),
 the GitHub repo and README. Goal: be found by people who want a Minecraft launcher that
 **does not require a Microsoft account**, plus the broader "best Minecraft launcher" intent, without
 saying anything untrue about what offline accounts can do.

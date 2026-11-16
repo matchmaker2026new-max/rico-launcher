@@ -8,7 +8,7 @@ public final class CrashDiagnostics {
     // Minecraft redirects System.err into Log4j, which shuts down concurrently with hooks.
     // Keep the original OS stderr so shutdown stacks cannot disappear with the logger.
     private static final java.io.PrintStream OUT = new java.io.PrintStream(new java.io.FileOutputStream(java.io.FileDescriptor.err), true);
-    private static final String PREFIX = "[Arctic diagnostics] "; // i18n-ignore: log
+    private static final String PREFIX = "[RICO diagnostics] "; // i18n-ignore: log
     private static final java.nio.file.Path HANG_FILE = java.nio.file.Paths.get(System.getProperty("arctic.diagnostics.hangFile", "arctic-hang.txt")).toAbsolutePath();
     private static volatile long progress;
     private static long startProgress;
@@ -34,7 +34,7 @@ public final class CrashDiagnostics {
                 }
                 OUT.flush();
             }
-        }, "Arctic exit trace"));
+        }, "RICO exit trace"));
         try {
             logger = Logger.getLogger("java.lang.Runtime");
             logger.setLevel(Level.FINE);
@@ -114,7 +114,7 @@ public final class CrashDiagnostics {
                     }
                 }
             }
-        }, "Arctic hang watchdog"); // i18n-ignore
+        }, "RICO hang watchdog"); // i18n-ignore
         watcher.setDaemon(true);
         watcher.start();
         java.nio.file.Path parent = HANG_FILE.getParent();

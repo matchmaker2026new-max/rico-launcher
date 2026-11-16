@@ -14,7 +14,7 @@ import com.arcticlauncher.client.ui.Scroll;
 import com.arcticlauncher.client.ui.TextField;
 
 /**
- * The Mods screen: every Arctic feature as a card, with a search box and
+ * The Mods screen: every RICO feature as a card, with a search box and
  * category chips. Cards switch mods on and off and open their settings.
  */
 final class ModsScreen extends Page {

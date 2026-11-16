@@ -16,10 +16,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Arctic's multiplayer list, in place of the game's: your servers with their icons, messages
+ * RICO's multiplayer list, in place of the game's: your servers with their icons, messages
  * and pings; pick one up and drag it to reorder (the others make room as it moves); LAN worlds
  * below. Add, edit, delete and direct connect work as in the game, in the same servers.dat.
- * The Discover tab lists Arctic's public servers (the launcher's list), to join or add.
+ * The Discover tab lists RICO's public servers (the launcher's list), to join or add.
  */
 public final class ServersPage extends Page {
 	private static final int LIST_W = 340;
@@ -66,7 +66,7 @@ public final class ServersPage extends Page {
 	private long lastClickAt;
 	private int lastClickRow = -1;
 	private long lastFrame;
-	/** On the Discover tab: Arctic's public servers (null while loading). */
+	/** On the Discover tab: RICO's public servers (null while loading). */
 	private boolean discover;
 	private volatile List<Servers.Entry> publicList;
 	/** The list in the server's own new random order, and each server's players as listed (-1: not answering). */
@@ -80,7 +80,7 @@ public final class ServersPage extends Page {
 	/** Height of the abuse note under the Discover list, set while it's drawn. */
 	private int discoverNoteH;
 	private static final String ABUSE_LINE =
-			"See a misleading listing, or own this server and want it changed? Email abuse@arcticlauncher.com";
+			"See a misleading listing, or own this server and want it changed? Email the RICO GitHub repository";
 
 	public ServersPage() {
 		this(null);
@@ -229,7 +229,7 @@ public final class ServersPage extends Page {
 		rebuild();
 	}
 
-	/** Arctic's public list, in the background; each server is asked how it is, too ({@code again}: even if it just answered). */
+	/** RICO's public list, in the background; each server is asked how it is, too ({@code again}: even if it just answered). */
 	private void loadPublic(final boolean again) {
 		publicList = null;
 		publicRandom = null;

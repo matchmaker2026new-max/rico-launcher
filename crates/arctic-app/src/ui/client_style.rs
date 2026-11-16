@@ -1,4 +1,4 @@
-//! Picking the Arctic Client's in-game menu style (onboarding and Settings).
+//! Picking the RICO Client's in-game menu style (onboarding and Settings).
 
 use arctic_core::settings::{ClientStyle, Settings};
 use eframe::egui::{
@@ -26,7 +26,7 @@ struct Preview {
 
 fn preview(style: ClientStyle) -> Preview {
     match style {
-        ClientStyle::Arctic => Preview {
+        ClientStyle::RICO => Preview {
             sky_top: Color32::from_rgb(0x07, 0x0E, 0x1C),
             sky_bottom: Color32::from_rgb(0x14, 0x28, 0x45),
             ground: Color32::from_rgb(0x0C, 0x18, 0x2B),

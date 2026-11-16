@@ -4,7 +4,7 @@ import com.arcticlauncher.client.ui.KeyButton;
 import com.arcticlauncher.client.ui.Scroll;
 import com.arcticlauncher.client.ui.Widget;
 
-/** Where a tab's widgets go: the Arctic menu. */
+/** Where a tab's widgets go: the RICO menu. */
 interface Host {
 	Widget add(Widget w);
 

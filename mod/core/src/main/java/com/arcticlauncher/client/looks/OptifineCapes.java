@@ -15,7 +15,7 @@ import javax.imageio.ImageIO;
 
 /**
  * OptiFine's capes without OptiFine: OptiFine players' capes are public (one PNG per player name on its cape
- * server), so a player with no Arctic cape and none of Mojang's can still show theirs. Names are asked one
+ * server), so a player with no RICO cape and none of Mojang's can still show theirs. Names are asked one
  * at a time on a thread of their own, each once (again later when the server couldn't be reached).
  */
 final class OptifineCapes {
@@ -29,7 +29,7 @@ final class OptifineCapes {
 	private static final int MC_H = 32;
 	/** Valid Minecraft names only (the name goes into a URL). */
 	private static final int MAX_NAME = 16;
-	/** The widest image looked at (the widest cape Arctic takes). */
+	/** The widest image looked at (the widest cape RICO takes). */
 	private static final int MAX_WIDTH = 1024;
 
 	/** Name → texture hash; "" when that player has no OptiFine cape. */

@@ -1,11 +1,11 @@
 //! Third-party clients for Bedrock Edition (Latite, Flarial).
 //!
 //! Bedrock has no mod loader, so every Bedrock client is a DLL that gets loaded into the running game
-//! (Windows only), which is also how other launchers offer them. Arctic doesn't ship or rebuild these:
+//! (Windows only), which is also how other launchers offer them. RICO doesn't ship or rebuild these:
 //! the player picks one, the launcher downloads the DLL from the client's own releases (checking the
 //! SHA-256 GitHub lists for it) and loads it into Bedrock once the game is up.
 //!
-//! Servers can ban players for modified clients, and the clients are not made by Arctic; the Bedrock tab
+//! Servers can ban players for modified clients, and the clients are not made by RICO; the Bedrock tab
 //! says both before a client is switched on.
 
 use std::path::{Path, PathBuf};

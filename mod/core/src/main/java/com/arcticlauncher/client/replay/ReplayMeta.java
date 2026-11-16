@@ -5,7 +5,7 @@ import java.util.List;
 
 /**
  * {@code metaData.json} inside a replay, in ReplayMod's format (so its
- * files and ours open in either), plus Arctic's own {@code arctic.json}.
+ * files and ours open in either), plus RICO's own {@code arctic.json}.
  */
 public final class ReplayMeta {
 	public boolean singleplayer;
@@ -23,7 +23,7 @@ public final class ReplayMeta {
 	public String[] players = new String[0];
 	public String mcversion;
 
-	/** Arctic's extras ({@code arctic.json}). */
+	/** RICO's extras ({@code arctic.json}). */
 	public static final class Extras {
 		public int version = 1;
 		public String selfName;

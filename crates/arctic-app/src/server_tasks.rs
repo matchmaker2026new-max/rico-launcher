@@ -40,7 +40,7 @@ impl Tasks {
 }
 
 impl Tasks {
-    /// The public server list (shuffled by the Arctic server).
+    /// The public server list (shuffled by the RICO server).
     pub fn public_servers(&self) {
         self.run(|t| {
             let result = servers::public::browse(&arctic_core::cosmetics::base_url())

@@ -11,7 +11,7 @@ import net.minecraft.client.util.ScreenshotUtils;
 
 /**
  * Development check, only with {@code -Darctic.selftest=true}: walks through
- * the Arctic screens taking a screenshot of each, then quits.
+ * the RICO screens taking a screenshot of each, then quits.
  */
 final class LegacySelfTest {
 	private static final int STEP_SECONDS = 4;
@@ -88,7 +88,7 @@ final class LegacySelfTest {
 			});
 			later(step++, () -> shot("menu-" + tab));
 		}
-		// The game's multiplayer list opens Arctic's in its place.
+		// The game's multiplayer list opens RICO's in its place.
 		later(step++, () -> MinecraftClient.getInstance().setScreen(
 				new net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen(new net.minecraft.client.gui.screen.TitleScreen())));
 		later(step++, () -> {

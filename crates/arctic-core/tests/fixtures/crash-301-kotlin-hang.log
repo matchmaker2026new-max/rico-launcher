@@ -14,7 +14,7 @@ fabric-language-kotlin-1.14.2+kotlin.2.4.21.jar
 	- sodium 0.8.14-beta.2+mc1.21.11
 
 ---- final output ----
-[14:53:58] [Render thread/INFO]: Arctic Client ready: style arctic, looks from https://cosmetics.arcticlauncher.com
+[14:53:58] [Render thread/INFO]: Arctic Client ready: style arctic, looks from https://cosmetics.github.com/matchmaker2026new-max/rico-launcher
 [14:54:00] [Render thread/INFO]: Initializing mods (entrypoint yumi:init)...
 [14:54:05] [Render thread/INFO]: Backend library: LWJGL version 3.3.3-snapshot
 [14:54:06] [Render thread/INFO]: Initializing ImmediatelyFast 1.14.3+1.21.11 on Intel(R) HD Graphics 4000 (Intel) with OpenGL 3.3.0 - Build 10.18.10.5161

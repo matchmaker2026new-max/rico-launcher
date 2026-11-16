@@ -10,7 +10,7 @@ public final class LegacyPageScreen extends Screen {
 	private final Page page;
 	private final Screen parent;
 
-	/** The screen under the Arctic menu (the game's, or none). */
+	/** The screen under the RICO menu (the game's, or none). */
 	Screen parent() {
 		return parent;
 	}

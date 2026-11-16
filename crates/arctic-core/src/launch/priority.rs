@@ -14,13 +14,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 /// After the window opens, how long until the game counts as ready when it
-/// doesn't say so itself (only the Arctic Client prints when it is ready).
+/// doesn't say so itself (only the RICO Client prints when it is ready).
 const READY_AFTER_WINDOW: Duration = Duration::from_secs(15);
 /// The boost never outlasts this, whatever the game prints.
 const MAX_BOOST: Duration = Duration::from_secs(180);
 const POLL: Duration = Duration::from_millis(250);
 
-/// The Arctic Client's line once the loading screen is gone.
+/// The RICO Client's line once the loading screen is gone.
 pub const READY_MARKER: &str = "[RICO startup]";
 
 static GENTLE: AtomicBool = AtomicBool::new(false);

@@ -53,7 +53,7 @@ for version in 1.8.9 1.21.11 26.2 26.3; do
   python3 packaging/verify-replay-audio.py "audio-test-results/$version/replay_videos"
 done
 
-# Check Arctic's default multiplayer browser and preserved third-party menus.
+# Check RICO's default multiplayer browser and preserved third-party menus.
 if [ "${ARCTIC_REPLAY_ONLY:-false}" = true ]; then exit 0; fi
 for menu_version in 26.2 26.3; do
 id=menu-compat-$menu_version

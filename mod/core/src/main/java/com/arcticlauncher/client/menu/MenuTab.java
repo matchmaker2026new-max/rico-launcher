@@ -3,7 +3,7 @@ package com.arcticlauncher.client.menu;
 import com.arcticlauncher.client.gfx.Gfx;
 import com.arcticlauncher.client.style.Style;
 
-/** One tab of the Arctic menu. */
+/** One tab of the RICO menu. */
 interface MenuTab {
 	/** The sidebar name. */
 	String title();

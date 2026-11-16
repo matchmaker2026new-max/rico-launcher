@@ -38,7 +38,7 @@ public final class GlassPacks {
 
 	/** Log at the boundary that handles the failure; callers must not rethrow it. */
 	public static void warn(String source, Exception failure) {
-		LOGGER.log(Level.WARNING, "[Arctic CTM] Skipping " + source + "; using default glass where needed", failure);
+		LOGGER.log(Level.WARNING, "[RICO CTM] Skipping " + source + "; using default glass where needed", failure);
 	}
 
 	private static final String[] COLORS = {"white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray", "light_gray", "cyan", "purple", "blue", "brown", "green", "red", "black"};

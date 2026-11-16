@@ -4,14 +4,14 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
- * What the game's "Connection lost" screen says, for Arctic's in its place. Its fields moved
+ * What the game's "Connection lost" screen says, for RICO's in its place. Its fields moved
  * between versions (a reason, later a record holding it), so they're found by type: the text
  * that isn't the title, or a value with a {@code reason()} giving one.
  */
 public final class DisconnectText {
 	private DisconnectText() {}
 
-	/** The text with its colors as § codes (the nearest of the game's 16), so Arctic's page shows them. */
+	/** The text with its colors as § codes (the nearest of the game's 16), so RICO's page shows them. */
 	static String formatted(Component component) {
 		//#if MC >= 1.16
 		StringBuilder out = new StringBuilder();

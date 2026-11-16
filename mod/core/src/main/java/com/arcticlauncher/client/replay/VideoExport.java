@@ -154,7 +154,7 @@ public final class VideoExport implements ReplayBackend.FrameSink {
 			audioServer.setSoTimeout(60_000);
 		}
 		String[] args = finder != null && finder.builtin(ffmpeg) ? new String[] {
-				// Arctic Launcher's encoder: RGBA frames in, MP4 out.
+				// RICO Launcher's encoder: RGBA frames in, MP4 out.
 				ffmpeg.getAbsolutePath(), "--encode-video", Integer.toString(w), Integer.toString(h),
 				Integer.toString(fps), output.getAbsolutePath(),
 		} : new String[] {

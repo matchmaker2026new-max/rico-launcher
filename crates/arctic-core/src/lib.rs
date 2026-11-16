@@ -1,4 +1,4 @@
-//! Arctic Launcher core library.
+//! RICO Launcher core library.
 //!
 //! Everything that is not UI lives here so it can be unit-tested and reused
 //! (e.g. by a future CLI or Linux build). The egui app in `arctic-app` only

@@ -1,6 +1,6 @@
 # Releasing and auto-update
 
-The launcher updates itself from GitHub Releases of `brksfrb/arctic-launcher`.
+The launcher updates itself from GitHub Releases of `matchmaker2026new-max/rico-launcher`.
 
 Flatpak installations update through the Linux software manager. Stable release
 publication also triggers the [Flatpak workflow](../packaging/flatpak/README.md),
@@ -12,8 +12,8 @@ feed using this repository's GitHub Pages site.
 1. Bump `version` in the root `Cargo.toml` (`[workspace.package]`) and commit.
 2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
 3. `.github/workflows/release.yml` builds on Windows, Linux and macOS and publishes the
-   release: `arctic-launcher-windows-x64.exe`, `arctic-launcher-linux-x64`,
-   `arctic-launcher-macos.zip` (the app), `arctic-launcher-macos` (the program an update
+   release: `rico-launcher-windows-x64.exe`, `rico-launcher-linux-x64`,
+   `rico-launcher-macos.zip` (the app), `rico-launcher-macos` (the program an update
    replaces), the command line tools `arctic-windows-x64.exe`, `arctic-linux-x64` and
    `arctic-macos`, and `SHA256SUMS.txt`. GitHub stores a `sha256:` digest for every asset,
    and the updater refuses assets without one.
@@ -44,7 +44,7 @@ Use required updates for things like broken auth or security fixes.
 
 1. A few seconds after start (if enabled, so opening isn't slowed down) and from
    *About → Check for updates*, the app calls
-   `GET /repos/brksfrb/arctic-launcher/releases`.
+   `GET /repos/matchmaker2026new-max/rico-launcher/releases`.
 2. It picks the newest non-draft release above the running version that matches the channel.
 3. On **Update**, it streams the exe to `cache/updates/` and verifies SHA-256. It then
    swaps the running executable using `self_replace`, which works on Windows while the

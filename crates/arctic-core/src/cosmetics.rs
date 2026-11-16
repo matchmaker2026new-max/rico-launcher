@@ -1,6 +1,6 @@
-//! Client for the Arctic cosmetics server (see the `arctic-cosmetics`
+//! Client for the RICO cosmetics server (see the `arctic-cosmetics`
 //! crate). A player's look (skin, model, cape) is chosen locally and
-//! published; every Arctic client then shows it. Nothing is locked: the
+//! published; every RICO client then shows it. Nothing is locked: the
 //! server only checks who is publishing, so nobody can change someone
 //! else's look. Microsoft accounts prove it through Mojang's session server
 //! (like a Minecraft server does); offline names are claimed with a key the
@@ -19,7 +19,7 @@ use crate::skins::Variant;
 use crate::storage::{DataDirs, load_json, save_json};
 use crate::{Error, Result};
 
-pub const DEFAULT_URL: &str = "https://cosmetics.arcticlauncher.com";
+pub const DEFAULT_URL: &str = "https://cosmetics.github.com/matchmaker2026new-max/rico-launcher";
 const JOIN_URL: &str = "https://sessionserver.mojang.com/session/minecraft/join";
 const MAX_BYTES: u64 = 2 * 1024 * 1024;
 const CREDENTIALS_FILE: &str = "cosmetics.json";
@@ -1015,7 +1015,7 @@ fn sign_in_offline(base: &str, name: &str, key: &str) -> Result<Session> {
     Ok(resp.body_mut().with_config().limit(MAX_BYTES).read_json()?)
 }
 
-/// What the Arctic mod gets from the launcher for one game session.
+/// What the RICO mod gets from the launcher for one game session.
 pub struct ModSession<'a> {
     pub base: &'a str,
     /// Cosmetics session, so looks picked in game publish as this player.
@@ -1026,7 +1026,7 @@ pub struct ModSession<'a> {
     pub proxy: &'a crate::proxy::ProxySettings,
     /// In-game account switching, while the launcher runs.
     pub bridge: Option<&'a crate::bridge::BridgeInfo>,
-    /// The game may tell the Arctic server (for friends) which server it's on.
+    /// The game may tell the RICO server (for friends) which server it's on.
     pub share_server: bool,
     /// A duel to start from the title screen (see `QuickPlay::Duel`).
     pub duel: Option<serde_json::Value>,
@@ -1034,7 +1034,7 @@ pub struct ModSession<'a> {
     pub replay: Option<serde_json::Value>,
 }
 
-/// Write the session file for the Arctic mod in `game_dir`.
+/// Write the session file for the RICO mod in `game_dir`.
 pub fn write_mod_session(game_dir: &Path, session: &ModSession) -> Result<()> {
     let ModSession {
         base,
@@ -1055,7 +1055,7 @@ pub fn write_mod_session(game_dir: &Path, session: &ModSession) -> Result<()> {
         "style": style.id(),
         "fancy": fancy,
         "style_set": style_set,
-        // Server connections through the proxy (the Arctic Client does
+        // Server connections through the proxy (the RICO Client does
         // that part; Minecraft only proxies its own web services).
         "proxy": {
             "enabled": proxy.active().is_some(),
@@ -1077,9 +1077,9 @@ pub fn write_mod_session(game_dir: &Path, session: &ModSession) -> Result<()> {
     write_private(&path, &serde_json::to_vec_pretty(&contents)?)
 }
 
-/// Write `bytes` to `path` for this user only (the session file holds the Arctic token, the proxy password
+/// Write `bytes` to `path` for this user only (the session file holds the RICO token, the proxy password
 /// and the bridge secret): through a temporary file, with no `.bak` of the previous contents, and without
-/// group or other access on Unix. The Arctic Client deletes the file once it has read it.
+/// group or other access on Unix. The RICO Client deletes the file once it has read it.
 fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
     use std::io::Write;
     if let Some(parent) = path.parent() {

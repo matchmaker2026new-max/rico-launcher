@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * The Account tab: switch accounts without restarting (through the
- * launcher), and the SOCKS5 proxy for server connections and Arctic's own
+ * launcher), and the SOCKS5 proxy for server connections and RICO's own
  * requests (the launcher sets the default; changes here win until the
  * launcher's setting changes again).
  */

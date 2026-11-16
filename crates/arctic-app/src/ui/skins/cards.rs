@@ -182,7 +182,7 @@ impl ArcticApp {
         let mut blocked = false;
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = vec2(GAP, GAP);
-            // Your Minecraft skin: wearing it means no Arctic skin.
+            // Your Minecraft skin: wearing it means no RICO skin.
             let mc_key = if current.arctic_skin || current.skin_key.is_none() {
                 self.skin_png("mc").map(|_| "mc".to_owned())
             } else {
@@ -402,8 +402,8 @@ impl ArcticApp {
         self.optifine_capes(ui);
     }
 
-    /// OptiFine capes of the accounts in this launcher: one click wears it as an Arctic cape, so
-    /// Arctic players see it, OptiFine or not.
+    /// OptiFine capes of the accounts in this launcher: one click wears it as an RICO cape, so
+    /// RICO players see it, OptiFine or not.
     fn optifine_capes(&mut self, ui: &mut egui::Ui) {
         let p = self.palette();
         let mut names: Vec<String> = self
@@ -500,7 +500,7 @@ impl ArcticApp {
         }
     }
 
-    /// Arctic capes, your own image, or none. Capes that can animate carry a small
+    /// RICO capes, your own image, or none. Capes that can animate carry a small
     /// animation icon; the Animate switch is in the Equipped card.
     fn arctic_capes(&mut self, ui: &mut egui::Ui) {
         let p = self.palette();

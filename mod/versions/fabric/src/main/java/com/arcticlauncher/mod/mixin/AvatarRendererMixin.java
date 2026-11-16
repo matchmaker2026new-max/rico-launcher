@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Players get Arctic's cosmetics layer, and a speaker on their name tag while talking. */
+/** Players get RICO's cosmetics layer, and a speaker on their name tag while talking. */
 @Mixin(AvatarRenderer.class)
 abstract class AvatarRendererMixin {
 	/** How long a player's looks found for its render state stay good. */
@@ -30,7 +30,7 @@ abstract class AvatarRendererMixin {
 	@Inject(method = "extractRender" + "State(Lnet/minecraft/world/entity/Avatar;Lnet/minecraft/client/renderer/entity/state/AvatarRenderState;F)V",
 			at = @At("TAIL"))
 	private void arctic$identify(Avatar entity, AvatarRenderState state, float partialTick, CallbackInfo ci) {
-		// Only players can be Arctic players: mannequins and other player-shaped
+		// Only players can be RICO players: mannequins and other player-shaped
 		// entities skip the looks, emotes and cosmetics work (a crowd of them adds up).
 		java.util.UUID id = entity instanceof net.minecraft.world.entity.player.Player ? entity.getUUID() : null;
 		AvatarIdentity identity = (AvatarIdentity) state;

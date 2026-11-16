@@ -1,4 +1,4 @@
-//! Embeds the Arctic Client: `mod/dist/arctic-client.pack` holds a jar for
+//! Embeds the RICO Client: `mod/dist/arctic-client.pack` holds a jar for
 //! every build target in `mod/targets.json` (see `mod/build.py`), and each
 //! target is looked up by every Minecraft version it covers.
 
@@ -29,10 +29,10 @@ fn main() {
         if !packed.iter().any(|(b, _)| b == build) {
             assert!(
                 !release,
-                "Arctic Client {build} isn't in {} (run python mod/build.py)",
+                "RICO Client {build} isn't in {} (run python mod/build.py)",
                 pack_path.display()
             );
-            println!("cargo:warning=skipping Arctic Client {build}: it isn't packed");
+            println!("cargo:warning=skipping RICO Client {build}: it isn't packed");
             continue;
         }
         for covered in target["covers"].as_array().expect("covers") {
@@ -84,7 +84,7 @@ fn packed_builds(path: &Path) -> Vec<(String, Option<String>)> {
     lzma_rs::lzma_decompress(&mut std::io::Cursor::new(bytes), &mut raw)
         .expect("mod/dist/arctic-client.pack is damaged (run python mod/build.py --pack)");
     let magic = b"ARCTICPACK1\n";
-    assert!(raw.starts_with(magic), "not an Arctic Client pack");
+    assert!(raw.starts_with(magic), "not an RICO Client pack");
     let at = magic.len();
     let len = u32::from_le_bytes(raw[at..at + 4].try_into().unwrap()) as usize;
     let index: serde_json::Value =

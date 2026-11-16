@@ -4,12 +4,12 @@ Build the mods (`JAVA_HOME` must be JDK 25), then run
 `python3 mod/tools/check_badge_assets.py` to check both the legacy pictures
 and modern bitmap-font resources in every built jar. On 1.21.6 and newer,
 these fonts must also be in the required `resourcepacks/client` pack:
-Fabric Loader alone does not publish mod assets to Minecraft, and Arctic
+Fabric Loader alone does not publish mod assets to Minecraft, and RICO
 must show its badge even without Fabric Resource Loader / performance mods.
 
 For the runtime check, start an offline server bound to loopback and two
-Arctic clients named `ArcticDev` and `ArcticDev2`, in separate game folders.
-Use the built jars. The test deliberately works with Arctic alone (without
+RICO clients named `ArcticDev` and `ArcticDev2`, in separate game folders.
+Use the built jars. The test deliberately works with RICO alone (without
 Fabric API), covering the standalone resource-loading path too.
 
 Give each client these JVM properties, with its own absolute command path:
@@ -19,7 +19,7 @@ Give each client these JVM properties, with its own absolute command path:
 -Darctic.proof.commands=/absolute/game-folder/command.txt
 ```
 
-The opt-in test seeds only those two offline UUIDs into the normal Arctic
+The opt-in test seeds only those two offline UUIDs into the normal RICO
 membership cache, because offline accounts cannot authenticate to the
 production membership service. It does not replace badge drawing or the
 camera transforms. It closes menus and prevents pausing on focus loss.

@@ -21,7 +21,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-/** Vanilla text fields: Arctic field background. */
+/** Vanilla text fields: RICO field background. */
 @Mixin(EditBox.class)
 abstract class EditBoxMixin {
 	//#if MC >= 1.20.2
@@ -63,7 +63,7 @@ abstract class EditBoxMixin {
 			method = "extractWidgetRenderState",
 			at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;fill(IIIII)V", ordinal = 1))
 	private void arctic$fieldInner(GuiGraphicsExtractor g, int x0, int y0, int x1, int y1, int color) {
-		// The Arctic field is already fully drawn by the border redirect above.
+		// The RICO field is already fully drawn by the border redirect above.
 		if (!ArcticClient.restyles()) {
 			g.fill(x0, y0, x1, y1, color);
 		}
@@ -95,7 +95,7 @@ abstract class EditBoxMixin {
 			//#endif
 			at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/components/EditBox;fill(Lcom/mojang/blaze3d/vertex/PoseStack;IIIII)V", ordinal = 1))
 	private void arctic$fieldInner(com.mojang.blaze3d.vertex.PoseStack pose, int x0, int y0, int x1, int y1, int color) {
-		// The Arctic field is already fully drawn by the border redirect above.
+		// The RICO field is already fully drawn by the border redirect above.
 		if (!ArcticClient.restyles()) {
 			net.minecraft.client.gui.GuiComponent.fill(pose, x0, y0, x1, y1, color);
 		}

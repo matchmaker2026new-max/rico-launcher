@@ -1,4 +1,4 @@
-//! Arctic's supporter, Flash Hosting: a small row in the sidebar, a card
+//! RICO's supporter, Flash Hosting: a small row in the sidebar, a card
 //! where a server that stays up is the natural next step (playing together),
 //! and a credit in About. Never in the way; Settings → "Show supporter
 //! mentions" hides all of it.

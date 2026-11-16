@@ -127,7 +127,7 @@ final class ModCatalog {
 							f.choice("Corner", com.arcticlauncher.client.hud.Watermark.CORNERS, () -> c.watermarkCorner, i -> c.watermarkCorner = i);
 							f.choice("Size", new String[] {"12", "16", "20", "24", "32"}, () -> c.watermarkSize, i -> c.watermarkSize = i);
 							f.choice("Opacity", com.arcticlauncher.client.hud.Watermark.OPACITIES, () -> c.watermarkOpacity, i -> c.watermarkOpacity = i);
-							f.toggle("Name", "ARCTIC beside the snowflake", () -> c.watermarkName, on -> c.watermarkName = on);
+							f.toggle("Name", "RICO beside the snowflake", () -> c.watermarkName, on -> c.watermarkName = on);
 							f.toggle("Version", "The launcher's version after the snowflake", () -> c.watermarkVersion, on -> c.watermarkVersion = on);
 							f.swatches("Text color", WATERMARK_COLORS, () -> c.watermarkColor, v -> c.watermarkColor = v);
 						}

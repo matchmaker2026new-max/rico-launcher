@@ -34,9 +34,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Arctic's keys: while playing, and Right Shift (the Arctic menu) over
+ * RICO's keys: while playing, and Right Shift (the RICO menu) over
  * Minecraft's own screens too, unless you're typing or in an inventory.
- * Arctic's pages get their keys through {@link com.arcticlauncher.mod.PageScreen}.
+ * RICO's pages get their keys through {@link com.arcticlauncher.mod.PageScreen}.
  */
 @Mixin(KeyboardHandler.class)
 abstract class KeyboardHandlerMixin {

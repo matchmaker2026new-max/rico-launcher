@@ -4,7 +4,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
 
 /**
- * What the game's "Connection lost" screen says (title, reason), for Arctic's in its place: a
+ * What the game's "Connection lost" screen says (title, reason), for RICO's in its place: a
  * translation key for the title and a text for the reason, found by type.
  */
 public final class LegacyDisconnectText {

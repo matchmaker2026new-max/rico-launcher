@@ -32,7 +32,7 @@ import net.minecraft.client.renderer.RenderType;
 //#endif
 //#endif
 
-/** Every vanilla button gets the Arctic style's background. */
+/** Every vanilla button gets the RICO style's background. */
 //#if MC >= 1.19.4
 @Mixin(AbstractButton.class)
 //#else
@@ -104,7 +104,7 @@ abstract class AbstractButtonMixin {
 	}
 	//#else
 	// 1.15 - 1.19.3: renderButton draws the background as two blits (left half, right half) of widgets.png,
-	// for buttons and slider tracks alike; the first draws the whole Arctic widget, the second is dropped.
+	// for buttons and slider tracks alike; the first draws the whole RICO widget, the second is dropped.
 	@Shadow
 	protected int width;
 

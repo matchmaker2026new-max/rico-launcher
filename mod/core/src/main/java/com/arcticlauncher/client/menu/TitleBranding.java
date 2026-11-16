@@ -4,7 +4,7 @@ import com.arcticlauncher.client.ArcticClient;
 import com.arcticlauncher.client.gfx.Draw;
 import com.arcticlauncher.client.gfx.Gfx;
 
-/** Arctic's title artwork, shared by the native menu and the page preview. */
+/** RICO's title artwork, shared by the native menu and the page preview. */
 public final class TitleBranding {
 	private static final int ICON = 24;
 	private static final float WORDMARK_SCALE = 3f;

@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/** The Arctic badge (drawn over a blank mark, see TextRendererMixin) before the names of players who are on Arctic too, and their PvP tier. */
+/** The RICO badge (drawn over a blank mark, see TextRendererMixin) before the names of players who are on RICO too, and their PvP tier. */
 @Mixin(PlayerListHud.class)
 abstract class PlayerListHudMixin {
 	private static final String BADGE = com.arcticlauncher.client.feature.Badge.MARK;

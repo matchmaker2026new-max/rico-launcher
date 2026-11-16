@@ -1,4 +1,4 @@
-# Request: elytra art for every Arctic cape
+# Request: elytra art for every RICO cape
 
 > **Done (2026-10-11):** every cape and still image in the catalog now has wing art in every frame. This page stays as the spec for new capes. The stopgap issue below is fixed: auto wings put the cape's front on the outside, and frames are checked one by one.
 
@@ -6,7 +6,7 @@
 
 Minecraft hides the cape while a player wears an elytra and draws the elytra from the **same cape
 image** instead, using the wing area to the right of the cape (x 22–45 in 64-wide units). Before
-the art pass, only 5 of the 39 Arctic capes had pixels there, and those 5 had plain gradients (see
+the art pass, only 5 of the 39 RICO capes had pixels there, and those 5 had plain gradients (see
 [the baseline](#before-the-art-pass)). Without wing art, a player who equips an elytra loses the cape
 look entirely.
 
@@ -29,7 +29,7 @@ silhouette reaches the wing boundary; transparent stretches remain transparent. 
 designs have a light sweep over the wing artwork, with matching first and last frames. See the
 [`elytra-review.png`](cape-art-pack/elytra-review.png) contact sheet,
 [`elytra-motion.gif`](cape-art-pack/elytra-motion.gif), and the packing script in the art pack.
-**Standing in-game review (2026-10-12):** an isolated Arctic Minecraft 26.3 client equipped
+**Standing in-game review (2026-10-12):** an isolated RICO Minecraft 26.3 client equipped
 elytra, loaded all 39 catalog capes, and saved back, front, and later back captures for each
 (117 screenshots, no missing texture). All 17 animated capes changed visibly between the two
 back captures. A second pass loaded all eight `-still.png` variants and saved another 24
@@ -131,7 +131,7 @@ and widening toward the tip, and the inner face is left transparent.
 
 ## Coordinates per cape size
 
-Arctic capes scale the 64×32 layout. Multiply every number above by **s = image width ÷ 64**; a part
+RICO capes scale the 64×32 layout. Multiply every number above by **s = image width ÷ 64**; a part
 at (x, y, w, h) covers pixels x·s … (x + w)·s − 1 and y·s … (y + h)·s − 1. For frame *f* (counting from
 0) of a vertical strip, add **f × (width ÷ 2)** to every y.
 

@@ -599,7 +599,7 @@ fn mixin_competitor(
         };
         let lines: Vec<_> = block
             .lines()
-            .map(|l| l.trim().strip_prefix("[Arctic mixin] ").unwrap_or(l.trim()))
+            .map(|l| l.trim().strip_prefix("[RICO mixin] ").unwrap_or(l.trim()))
             .collect();
         let Some(class) = lines.iter().find_map(|l| l.strip_prefix("class=")) else {
             continue;
@@ -702,7 +702,7 @@ fn redirect_clash(
     let other = c[7].to_lowercase();
     let display = |id: &str| {
         if id.eq_ignore_ascii_case("arctic") {
-            "Arctic Client".to_owned()
+            "RICO Client".to_owned()
         } else {
             mods.iter()
                 .find(|m| m.id.eq_ignore_ascii_case(id))
@@ -711,9 +711,9 @@ fn redirect_clash(
     };
     let (name, other_name) = (display(&id), display(&other));
     let title = if other == "arctic" {
-        format!("Arctic Client conflict with {name}")
+        format!("RICO Client conflict with {name}")
     } else if id == "arctic" {
-        format!("Arctic Client conflict with {other_name}")
+        format!("RICO Client conflict with {other_name}")
     } else {
         format!("{name} clashes with {other_name}")
     };
@@ -1298,12 +1298,12 @@ mod tests {
             },
         ];
         let d = refine(crate::crash::diagnose(text), text, &mods).unwrap();
-        assert_eq!(d.title, "Arctic Client conflict with Space Background");
+        assert_eq!(d.title, "RICO Client conflict with Space Background");
         assert_eq!(d.mods, ["mod_id", "arctic"]);
         assert!(d.fix.is_none());
         let dir = tempfile::tempdir().unwrap();
         let d = diagnose_exit_in(text, -1, dir.path()).unwrap();
-        assert_eq!(d.title, "Arctic Client conflict with mod_id");
+        assert_eq!(d.title, "RICO Client conflict with mod_id");
         assert_eq!(d.mods, ["mod_id", "arctic"]);
     }
 

@@ -15,7 +15,7 @@ use crate::widgets;
 const WIDTH: f32 = 640.0;
 const LIST_HEIGHT: f32 = 380.0;
 const MAX_TAGS: usize = 5;
-const ABUSE: &str = "See a misleading listing, or own this server and want it changed? Email abuse@arcticlauncher.com";
+const ABUSE: &str = "See a misleading listing, or own this server and want it changed? Email the RICO GitHub repository";
 
 #[derive(Default)]
 pub struct DiscoverUi {

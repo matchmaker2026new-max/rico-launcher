@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 
 /**
- * 1.13-1.15 draw the player list's Arctic picture as a character of the default font, so its shadow is the
+ * 1.13-1.15 draw the player list's RICO picture as a character of the default font, so its shadow is the
  * text's. The shadow pass (the first of the two draws of a text) gets a blank character of the picture's width
  * in its place (assets/minecraft/font/default.json); the picture itself and the names keep theirs.
  */

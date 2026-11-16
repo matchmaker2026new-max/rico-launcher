@@ -14,7 +14,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import net.minecraft.client.MinecraftClient;
 
-/** Opt-in real clients using the actual looks service: no fabricated Arctic presence or styles. */
+/** Opt-in real clients using the actual looks service: no fabricated RICO presence or styles. */
 final class LegacyBadgeTest {
     private static final ScheduledExecutorService TIMER = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "arctic-badge-proof"); t.setDaemon(true); return t;

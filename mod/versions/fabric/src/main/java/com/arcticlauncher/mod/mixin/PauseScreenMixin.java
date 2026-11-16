@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.Shadow;
 //#endif
 
-/** Adds the Arctic button to the pause menu. */
+/** Adds the RICO button to the pause menu. */
 @Mixin(PauseScreen.class)
 abstract class PauseScreenMixin extends Screen {
 	//#if MC >= 1.14 && MC < 1.20.2

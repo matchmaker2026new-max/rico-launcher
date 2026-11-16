@@ -450,8 +450,8 @@ pub fn text(language: Language, english: &str) -> &'static str {
         "Voice chat on" => "المحادثة الصوتية مفعّلة",
         "When I speak" => "عند تحدثي",
         "Push to talk" => "اضغط للتحدث",
-        "Hold V in game to talk (change it in the Arctic menu → Voice)." => {
-            "اضغط باستمرار على V داخل اللعبة للتحدث (غيّره من قائمة Arctic ← الصوت)."
+        "Hold V in game to talk (change it in the RICO menu → Voice)." => {
+            "اضغط باستمرار على V داخل اللعبة للتحدث (غيّره من قائمة RICO ← الصوت)."
         }
         "Lower picks up quieter speech (and more background noise)." => {
             "يلتقط المستوى الأقل الكلام الهادئ (وضوضاء خلفية أكثر)."
@@ -661,8 +661,8 @@ pub fn text(language: Language, english: &str) -> &'static str {
         "Reset Minecraft skin" => "إعادة ضبط مظهر Minecraft",
         "Saving…" => "جارٍ الحفظ…",
         "Saved" => "تم الحفظ",
-        "Type their friend code or their Microsoft account's name. They need to use Arctic too." => {
-            "اكتب رمز الصديق أو اسم حساب Microsoft الخاص به. يجب أن يستخدم Arctic أيضًا."
+        "Type their friend code or their Microsoft account's name. They need to use RICO too." => {
+            "اكتب رمز الصديق أو اسم حساب Microsoft الخاص به. يجب أن يستخدم RICO أيضًا."
         }
         "Your friend code: give it to people so they can add you" => {
             "رمز صداقتك: أعطه للآخرين ليتمكنوا من إضافتك"
@@ -686,8 +686,8 @@ pub fn text(language: Language, english: &str) -> &'static str {
         "Invite to your shared world" => "دعوة إلى عالمك المشترك",
         "Start and join" => "البدء والانضمام",
         "Start the game in a duel arena and invite {}" => "ابدأ اللعبة في ساحة مبارزة وادعُ {}",
-        "No friends yet. Add someone by their friend code (or a Microsoft account's name); they need to use Arctic too." => {
-            "لا يوجد أصدقاء بعد. أضف شخصًا باستخدام رمز الصديق أو اسم حساب Microsoft؛ ويجب أن يستخدم Arctic أيضًا."
+        "No friends yet. Add someone by their friend code (or a Microsoft account's name); they need to use RICO too." => {
+            "لا يوجد أصدقاء بعد. أضف شخصًا باستخدام رمز الصديق أو اسم حساب Microsoft؛ ويجب أن يستخدم RICO أيضًا."
         }
         "Friends couldn't be loaded: {}" => "تعذّر تحميل الأصدقاء: {}",
         "Link {} to your friends profile?" => "ربط {} بملف أصدقائك؟",

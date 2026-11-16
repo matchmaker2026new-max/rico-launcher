@@ -5,7 +5,7 @@ use crate::widgets;
 use arctic_core::{APP_NAME, APP_VERSION};
 use eframe::egui::{self, RichText, Sense, vec2};
 
-pub(crate) const DISCORD: &str = "https://discord.arcticlauncher.com";
+pub(crate) const DISCORD: &str = "https://github.com/matchmaker2026new-max/rico-launcher/issues";
 
 impl ArcticApp {
     pub(crate) fn about_tab(&mut self, ui: &mut egui::Ui) {

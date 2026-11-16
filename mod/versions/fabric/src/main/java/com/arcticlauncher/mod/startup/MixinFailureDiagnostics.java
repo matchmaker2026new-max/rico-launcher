@@ -20,7 +20,7 @@ import org.objectweb.asm.Opcodes;
 import com.arcticlauncher.client.Lang;
 /** Agent/system-loader only. No class bytes, mixin lists, or per-class history retained on success. */
 public final class MixinFailureDiagnostics {
-	private static final String PREFIX = "[Arctic mixin] "; // i18n-ignore: log
+	private static final String PREFIX = "[RICO mixin] "; // i18n-ignore: log
 	private static final PrintStream OUT = new PrintStream(new FileOutputStream(FileDescriptor.err), true);
 	private static final Map<String, String> FAILURES = new LinkedHashMap<>();
 	private static Thread mainThread;
@@ -82,7 +82,7 @@ public final class MixinFailureDiagnostics {
 					Object metadata = invoke(mod, "getMetadata");
 					mods.add(invoke(metadata, "getId") + " " + invoke(invoke(metadata, "getVersion"), "getFriendlyString"));
 				}
-				for (String mod : mods) out.append("[Arctic mixin mod] ").append(mod).append('\n'); // i18n-ignore
+				for (String mod : mods) out.append("[RICO mixin mod] ").append(mod).append('\n'); // i18n-ignore
 			} catch (Throwable unavailable) {
 				line(out, "resolved mods unavailable: " + unavailable.getClass().getSimpleName()); // i18n-ignore
 			}

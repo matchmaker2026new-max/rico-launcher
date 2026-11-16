@@ -42,7 +42,7 @@ import net.minecraft.client.player.AbstractClientPlayer;
 //#endif
 
 /**
- * Draws the Arctic cosmetics a player wears, attached to their model's parts.
+ * Draws the RICO cosmetics a player wears, attached to their model's parts.
  * Three shapes of layer across versions (entity-based up to 1.21.1,
  * state-based with buffers up to 1.21.8, state-based with a submit collector
  * after); the drawing itself is the same.

@@ -1,5 +1,5 @@
 //! Simple Voice Chat's wire format (compatibility version 20, SVC 2.6.x),
-//! so Arctic players can talk with Simple Voice Chat players on servers
+//! so RICO players can talk with Simple Voice Chat players on servers
 //! that run its plugin.
 //!
 //! The server hands out a secret through the game connection (the
@@ -12,7 +12,7 @@
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes128Gcm, Nonce};
 
-/// The version Arctic speaks; the server ignores other versions.
+/// The version RICO speaks; the server ignores other versions.
 pub const COMPATIBILITY_VERSION: i32 = 20;
 const MAGIC: u8 = 0xFF;
 const NONCE_LEN: usize = 12;
@@ -123,7 +123,7 @@ pub enum Incoming {
     ConnectionCheckAck,
     KeepAlive,
     Sound(Sound),
-    /// Something Arctic doesn't use (pings, …).
+    /// Something RICO doesn't use (pings, …).
     Other,
 }
 
@@ -237,7 +237,7 @@ pub fn request_secret() -> Vec<u8> {
     COMPATIBILITY_VERSION.to_be_bytes().to_vec()
 }
 
-/// A UUID as SVC and Arctic write it (32 hex digits, lower case).
+/// A UUID as SVC and RICO write it (32 hex digits, lower case).
 pub fn uuid_hex(id: &[u8; 16]) -> String {
     id.iter().map(|b| format!("{b:02x}")).collect()
 }

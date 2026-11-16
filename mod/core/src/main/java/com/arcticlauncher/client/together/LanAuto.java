@@ -4,7 +4,7 @@ import com.arcticlauncher.client.Platform;
 import com.arcticlauncher.client.notice.Notices;
 
 /**
- * While Arctic Launcher is hosting (play together), the singleplayer world you're in opens to LAN
+ * While RICO Launcher is hosting (play together), the singleplayer world you're in opens to LAN
  * by itself, so there's no Esc, Open to LAN, Start LAN World to go through (and the launcher hears
  * the announcement the moment it's made). Once per world; a world already open is left alone.
  */

@@ -7,7 +7,7 @@ public final class Look {
 	public final String cape;
 	/** Worn 3D cosmetics (catalog ids). */
 	public final java.util.List<String> cosmetics;
-	/** Playing with Arctic right now (checked in recently). */
+	/** Playing with RICO right now (checked in recently). */
 	public final boolean arctic;
 	final long fetched;
 	/** How some worn cosmetics sit, by id. */

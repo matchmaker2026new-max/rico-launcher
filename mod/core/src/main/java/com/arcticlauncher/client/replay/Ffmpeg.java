@@ -6,7 +6,7 @@ import com.google.gson.JsonParser;
 import java.io.File;
 
 /**
- * Finds a video encoder for export: FFmpeg on the PATH, else what Arctic
+ * Finds a video encoder for export: FFmpeg on the PATH, else what RICO
  * Launcher offers: on Windows the launcher itself (Windows' own H.264
  * encoder, nothing to download), elsewhere a copy of FFmpeg it downloads once.
  */
@@ -19,7 +19,7 @@ public final class Ffmpeg {
 	private volatile File runner;
 	private volatile boolean asking;
 	private volatile File found;
-	/** {@link #found} is Arctic Launcher's built-in encoder, not FFmpeg. */
+	/** {@link #found} is RICO Launcher's built-in encoder, not FFmpeg. */
 	private volatile boolean builtin;
 	private volatile String state = "unknown";
 	private volatile float progress;

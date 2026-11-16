@@ -7,7 +7,7 @@ public final class PackVisibility {
 
 	/**
 	 * Fabric adds this flag to Minecraft's pack objects. Resource Loader v1 uses '$',
-	 * older v0 releases use '_'. Optional reflection keeps Arctic usable without
+	 * older v0 releases use '_'. Optional reflection keeps RICO usable without
 	 * Fabric API and preserves genuinely selectable built-in packs such as Programmer Art.
 	 */
 	public static boolean isHidden(Object pack) {

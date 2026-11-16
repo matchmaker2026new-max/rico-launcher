@@ -1,4 +1,4 @@
-//! `arctic friends …`: your Arctic profile, friends and invites.
+//! `arctic friends …`: your RICO profile, friends and invites.
 
 use arctic_core::friends::{self, InviteTo, Overview};
 use arctic_core::{Error, Result, cosmetics};

@@ -24,7 +24,7 @@ import net.minecraft.client.renderer.PostChain;
 //#endif
 
 /**
- * Motion blur: a post effect from the Arctic Client pack (see mod/tools/motion_blur.py) that smears the
+ * Motion blur: a post effect from the RICO Client pack (see mod/tools/motion_blur.py) that smears the
  * picture along the way it moved since the last frame, after the world and before the HUD, so the HUD and
  * menus stay sharp. The camera's turn goes into the effect's uniform buffer each frame (MotionBlurUniforms).
  */

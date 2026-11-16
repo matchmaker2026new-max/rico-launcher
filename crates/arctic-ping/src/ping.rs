@@ -1,6 +1,6 @@
 //! Minecraft's server list ping: handshake, status request, then a ping
 //! for the round-trip time; and a login probe. Through the proxy when one
-//! is given (and the server isn't local), like the Arctic Client connects.
+//! is given (and the server isn't local), like the RICO Client connects.
 
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};

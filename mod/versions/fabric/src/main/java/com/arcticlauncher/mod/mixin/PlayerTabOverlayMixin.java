@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 //#endif
 
-/** A snowflake before the names of players who are on Arctic too, and their PvP tier. */
+/** A snowflake before the names of players who are on RICO too, and their PvP tier. */
 @Mixin(PlayerTabOverlay.class)
 abstract class PlayerTabOverlayMixin {
 	//#if MC >= 1.16 && MC < 26.1

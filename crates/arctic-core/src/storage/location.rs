@@ -100,7 +100,7 @@ pub fn set_chosen(default: &Path, folder: &Path) -> Result<()> {
 pub enum Target {
     /// Nothing (or only our own `location.txt`): the files can be moved there.
     Empty,
-    /// Arctic's files already (another copy, or a folder used before): use them as they are.
+    /// RICO's files already (another copy, or a folder used before): use them as they are.
     ArcticData,
     /// Other things: pick an empty folder or make one inside it.
     Other,
@@ -274,7 +274,7 @@ fn copy_tree(
     Ok(())
 }
 
-/// Use the Arctic files already in `to` as they are (nothing copied, nothing removed).
+/// Use the RICO files already in `to` as they are (nothing copied, nothing removed).
 pub fn adopt(default: &Path, to: &Path) -> Result<()> {
     if inspect(to) != Target::ArcticData {
         return Err(Error::Other(
@@ -285,7 +285,7 @@ pub fn adopt(default: &Path, to: &Path) -> Result<()> {
 }
 
 /// After a move: remove the old folder named in the new one's note. Only a folder that looks
-/// like Arctic's data is removed, never one inside or around the new folder, and the default
+/// like RICO's data is removed, never one inside or around the new folder, and the default
 /// folder keeps `location.txt`. Returns the folder removed.
 pub fn finish_move(root: &Path) -> Option<PathBuf> {
     let note = root.join(CLEANUP_FILE);

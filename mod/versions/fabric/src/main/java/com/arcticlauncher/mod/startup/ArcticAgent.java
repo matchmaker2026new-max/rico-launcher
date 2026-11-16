@@ -22,7 +22,7 @@ import org.objectweb.asm.tree.TryCatchBlockNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 /**
- * Started by the JVM before the game ({@code -javaagent}, the Arctic Client's own jar): makes
+ * Started by the JVM before the game ({@code -javaagent}, the RICO Client's own jar): makes
  * Fabric's class loading take turns. Fabric loads each class under a lock of its own and
  * rewrites it under Mixin's lock; with two threads loading at once those two kinds of lock
  * can end up each waiting for the other. One lock around the whole of loading a class rules

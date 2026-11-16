@@ -21,7 +21,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-/** Vanilla sliders: Arctic track and handle. */
+/** Vanilla sliders: RICO track and handle. */
 @Mixin(AbstractSliderButton.class)
 abstract class AbstractSliderButtonMixin {
 	//#if MC >= 1.21.2

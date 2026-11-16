@@ -36,7 +36,7 @@ const ZOOM_FOCUS: f32 = 28.0;
 /// Cosmetic slots in the order they're listed.
 pub(super) const SLOTS: [&str; 6] = ["head", "face", "back", "shoulders", "arms", "body"];
 
-/// What "you" look like to others: Arctic skin first, then Minecraft's.
+/// What "you" look like to others: RICO skin first, then Minecraft's.
 /// Changes still being saved are already in it.
 pub(super) struct CurrentLook {
     pub skin_key: Option<String>,
@@ -521,7 +521,7 @@ impl ArcticApp {
         });
     }
 
-    /// The worn Arctic cape, when it can animate (it has a still to switch to).
+    /// The worn RICO cape, when it can animate (it has a still to switch to).
     pub(super) fn worn_animated_cape(&self) -> Option<arctic_core::cosmetics::Preset> {
         let state = self.arctic_state()?;
         let hash = match &self.skins.trying.cape {
@@ -536,7 +536,7 @@ impl ArcticApp {
             .cloned()
     }
 
-    /// The cape's name for the Equipped list, and whether it's an Arctic one
+    /// The cape's name for the Equipped list, and whether it's an RICO one
     /// (which can be taken off here).
     fn equipped_cape_name(&self) -> (String, bool) {
         let state = self.arctic_state();

@@ -9,7 +9,7 @@ import javax.imageio.ImageIO;
 /**
  * Skins as Minecraft itself prepares downloaded ones: an old 64x32 skin (one arm and one leg)
  * becomes the 64x64 layout the player model reads, its base layer is made opaque and an overlay
- * filled solid is cleared. Arctic's skins are uploaded straight, so without this an old-format
+ * filled solid is cleared. RICO's skins are uploaded straight, so without this an old-format
  * skin came out scrambled. Works on HD skins too (any width that's a multiple of 64).
  */
 public final class SkinFormat {

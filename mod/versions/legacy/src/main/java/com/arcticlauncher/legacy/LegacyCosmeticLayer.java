@@ -23,7 +23,7 @@ import net.minecraft.client.render.model.ModelPart;
 import net.minecraft.util.Identifier;
 import org.lwjgl.opengl.GL11;
 
-/** Draws the Arctic cosmetics a player wears, attached to their model's parts. */
+/** Draws the RICO cosmetics a player wears, attached to their model's parts. */
 public final class LegacyCosmeticLayer implements FeatureRenderer<AbstractClientPlayerEntity> {
 	/** Players' looks found a moment ago: asked for every frame, kept this long. */
 	private static final long LOOK_REFRESH_MS = 250;

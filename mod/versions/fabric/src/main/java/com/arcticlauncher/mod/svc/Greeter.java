@@ -11,7 +11,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.network.Connection;
 
 /**
- * Says hello to a server that lists a hello channel: Arctic's own ({@code arctic:hello}) and Polarium's
+ * Says hello to a server that lists a hello channel: RICO's own ({@code arctic:hello}) and Polarium's
  * ({@code polarium:hello}, on Polarium's behalf), once per connection.
  *
  * <p>The server's channel list arrives in {@code minecraft:register}. Without Fabric API the client reads it

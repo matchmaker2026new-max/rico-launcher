@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Players get Arctic's cosmetics layer. */
+/** Players get RICO's cosmetics layer. */
 @Mixin(PlayerEntityRenderer.class)
 abstract class PlayerEntityRendererMixin {
 	// RETURN, not TAIL: Mixin 0.7 (Forge 1.8.9) refuses TAIL in a constructor.

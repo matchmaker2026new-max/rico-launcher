@@ -3,7 +3,7 @@
 //! Kept in `proxy.json` next to `accounts.json` (it can hold a password),
 //! not in `settings.json`. The launcher's HTTP goes through it with remote
 //! DNS (`socks5h`), the game gets it as Minecraft's `--proxy*` arguments
-//! (login and skin services), and the Arctic Client routes server
+//! (login and skin services), and the RICO Client routes server
 //! connections through it too.
 
 use serde::{Deserialize, Serialize};

@@ -1,4 +1,4 @@
-//! Arctic Client settings (`config/arctic.json` in a game folder) in a
+//! RICO Client settings (`config/arctic.json` in a game folder) in a
 //! bundle: an allow-list of keys, each checked and rebuilt, so a bundle can
 //! only carry values the mod accepts. The proxy and hidden players never
 //! leave the PC.
@@ -149,7 +149,7 @@ impl ClientPart {
     }
 }
 
-/// The Arctic Client holds `config/arctic.lock` while its game runs.
+/// The RICO Client holds `config/arctic.lock` while its game runs.
 pub fn in_use(game_dir: &Path) -> bool {
     let Ok(file) = std::fs::OpenOptions::new()
         .write(true)

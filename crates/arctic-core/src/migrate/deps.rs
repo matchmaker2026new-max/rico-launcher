@@ -1,5 +1,5 @@
 //! Required mods that aren't there. Packs from other launchers are
-//! sometimes missing one (the game then stops at startup); Arctic reads
+//! sometimes missing one (the game then stops at startup); RICO reads
 //! every mod's required dependencies, counts mods bundled inside other
 //! mods, and fetches what's missing from Modrinth when it can.
 

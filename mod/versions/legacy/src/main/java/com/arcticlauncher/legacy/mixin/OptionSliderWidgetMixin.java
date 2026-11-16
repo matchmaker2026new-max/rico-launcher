@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-/** Option sliders get the Arctic style's handle. */
+/** Option sliders get the RICO style's handle. */
 @Mixin(OptionSliderWidget.class)
 abstract class OptionSliderWidgetMixin {
 	private static final int HANDLE_W = 8;

@@ -1,5 +1,5 @@
-//! Background jobs for the Skins tab: the Arctic look (published to other
-//! Arctic players), the account's Minecraft skin and capes (Mojang, needs
+//! Background jobs for the Skins tab: the RICO look (published to other
+//! RICO players), the account's Minecraft skin and capes (Mojang, needs
 //! Microsoft), looking up other players and picking files.
 
 use std::collections::HashSet;
@@ -16,7 +16,7 @@ use arctic_core::skins::api::{self, Profile};
 
 use crate::tasks::{Event, Tasks};
 
-/// The player's Arctic look and the preset capes, textures included.
+/// The player's RICO look and the preset capes, textures included.
 #[derive(Debug, Clone)]
 pub struct ArcticState {
     pub presets: Vec<Preset>,
@@ -136,8 +136,8 @@ impl Tasks {
         }
     }
 
-    /// Read (after optionally publishing a new one) the Arctic look.
-    /// Load the Arctic look, or publish `change`. With `known` (the state
+    /// Read (after optionally publishing a new one) the RICO look.
+    /// Load the RICO look, or publish `change`. With `known` (the state
     /// shown now) a change only saves the look and fetches textures that
     /// aren't there yet, so trying things on stays quick.
     pub fn arctic_look(

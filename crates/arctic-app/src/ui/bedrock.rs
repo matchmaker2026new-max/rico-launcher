@@ -100,7 +100,7 @@ impl ArcticApp {
                 ui.label(
                     RichText::new(
                         "Minecraft for Windows only runs there, so it can't be started or \
-                         installed from Arctic on this computer.",
+                         installed from RICO on this computer.",
                     )
                     .color(p.muted),
                 );
@@ -373,7 +373,7 @@ impl ArcticApp {
             ui.label(RichText::new(crate::i18n::current("Client")).size(17.0).strong().color(p.text));
             ui.label(
                 RichText::new(
-                    "We're building our own Arctic Client for Bedrock. Until it's ready, the game starts as it is from here.",
+                    "We're building our own RICO Client for Bedrock. Until it's ready, the game starts as it is from here.",
                 )
                 .color(p.muted),
             );
@@ -751,13 +751,8 @@ impl ArcticApp {
                     }
                     changed = true;
                 }
-                if widgets::icon_button(
-                    ui,
-                    p,
-                    Icon::Copy,
-                    "Back up (a .mcworld in Arctic's folder)",
-                )
-                .clicked()
+                if widgets::icon_button(ui, p, Icon::Copy, "Back up (a .mcworld in RICO's folder)")
+                    .clicked()
                 {
                     self.tasks
                         .bedrock_backup_world(world.clone(), backups.clone());

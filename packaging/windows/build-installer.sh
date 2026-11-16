@@ -40,7 +40,7 @@ if grep -q "could not embed exe icon" "$LOG"; then
   exit 1
 fi
 
-SOURCE_EXE="$ROOT/target/$TARGET/release/arctic-launcher.exe"
+SOURCE_EXE="$ROOT/target/$TARGET/release/rico-launcher.exe"
 if [[ ! -f "$SOURCE_EXE" ]]; then
   echo "Expected Windows executable was not created: $SOURCE_EXE" >&2
   exit 1

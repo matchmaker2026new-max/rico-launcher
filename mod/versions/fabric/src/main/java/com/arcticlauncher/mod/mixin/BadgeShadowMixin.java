@@ -10,8 +10,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * The player list draws names with a shadow; the Arctic picture beside them has none. Before 1.21.4 a style can't
- * say "no shadow" (Compat.badgeStyle), so the draw of a glyph from one of the Arctic tab fonts (arctic:badge_tab,
+ * The player list draws names with a shadow; the RICO picture beside them has none. Before 1.21.4 a style can't
+ * say "no shadow" (Compat.badgeStyle), so the draw of a glyph from one of the RICO tab fonts (arctic:badge_tab,
  * ...) has its shadow switched off for that glyph. Names keep theirs.
  */
 @Mixin(targets = "net.minecraft.client.gui.Font$StringRenderOutput")

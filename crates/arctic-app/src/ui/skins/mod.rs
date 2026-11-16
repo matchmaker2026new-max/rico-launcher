@@ -1,5 +1,5 @@
-//! Cosmetics tab: your Arctic look (skin, cape and 3D cosmetics, seen by
-//! every Arctic player, on any account), your Minecraft skin and capes
+//! Cosmetics tab: your RICO look (skin, cape and 3D cosmetics, seen by
+//! every RICO player, on any account), your Minecraft skin and capes
 //! (Microsoft accounts), a 3D preview and a local library of skins.
 //!
 //! Clicking something wears it at once: the preview shows it right away
@@ -95,8 +95,8 @@ impl SkinTexture {
 }
 
 /// Texture keys: `lib:<id>` library skin, `mc` Minecraft skin,
-/// `mccape:<id>` Minecraft cape, `askin:<hash>` Arctic skin,
-/// `acape:<hash>` Arctic cape, `acos:<hash>` Arctic cosmetic texture.
+/// `mccape:<id>` Minecraft cape, `askin:<hash>` RICO skin,
+/// `acape:<hash>` RICO cape, `acos:<hash>` RICO cosmetic texture.
 #[derive(Default)]
 pub struct SkinsUi {
     loaded_for: Option<PathBuf>,
@@ -129,7 +129,7 @@ pub struct SkinsUi {
     /// Account id → Minecraft skin state (Microsoft accounts).
     pub account: HashMap<String, Result<AccountSkin, String>>,
     pub busy: bool,
-    /// Account id → Arctic look.
+    /// Account id → RICO look.
     pub arctic: HashMap<String, Result<ArcticState, String>>,
     pub arctic_busy: bool,
     /// When the look was last asked for: a failed load is asked for again after a while, so one
@@ -293,7 +293,7 @@ impl ArcticApp {
         self.accept_dropped_skins(ui.ctx());
     }
 
-    /// Fetch the active account's Arctic look (and Minecraft skin) once, or
+    /// Fetch the active account's RICO look (and Minecraft skin) once, or
     /// again with `force`.
     fn request_skin_state(&mut self, force: bool) {
         let Some(account) = self.accounts.active().cloned() else {
@@ -480,7 +480,7 @@ impl ArcticApp {
         }
     }
 
-    /// Back to the Minecraft skin (for Arctic players too).
+    /// Back to the Minecraft skin (for RICO players too).
     fn stop_wearing_skin(&mut self) {
         self.change_look(|l| l.skin = None, |t| t.skin = Some(None));
     }

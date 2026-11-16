@@ -185,7 +185,7 @@ fn gui_size(p: &Value) -> (f64, f64) {
 }
 
 /// The mod's box as screen fractions, pinned to the nearest edge like the
-/// Arctic Client's HUD editor does. Never-placed mods (all zero) stay
+/// RICO Client's HUD editor does. Never-placed mods (all zero) stay
 /// arranged automatically.
 fn place(m: &Value, (w, h): (f64, f64)) -> Option<Anchor> {
     let corner = |key: &str| {
@@ -218,7 +218,7 @@ fn axis(lo: f64, hi: f64, size: f64) -> (i64, i64) {
     }
 }
 
-/// Badlion's crosshair fields as Arctic's (clamped by the settings check).
+/// Badlion's crosshair fields as RICO's (clamped by the settings check).
 fn crosshair(c: &Value) -> Value {
     let num = |k: &str, default: f64| c.get(k).and_then(Value::as_f64).unwrap_or(default);
     let flag = |k: &str| c.pointer(&format!("/{k}/value")).and_then(Value::as_bool) == Some(true);
@@ -250,7 +250,7 @@ fn color(c: Option<&Value>) -> Option<i64> {
     Some(i64::from(argb as i32))
 }
 
-/// Switched-on HUD mods Arctic has no widget for ("Arrows", "Food").
+/// Switched-on HUD mods RICO has no widget for ("Arrows", "Food").
 fn left_out(p: &Value) -> Vec<String> {
     let Some(map) = p.as_object() else {
         return Vec::new();

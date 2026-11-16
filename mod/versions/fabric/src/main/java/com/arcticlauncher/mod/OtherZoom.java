@@ -5,7 +5,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 
-/** OptiFine's zoom key ("of.key.zoom"), taken off the key Arctic's zoom uses. */
+/** OptiFine's zoom key ("of.key.zoom"), taken off the key RICO's zoom uses. */
 final class OtherZoom {
 	private static final String OPTIFINE_ZOOM = "of.key.zoom";
 	private static final String UNBOUND = "key.keyboard.unknown";

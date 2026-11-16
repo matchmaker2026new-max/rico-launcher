@@ -2,7 +2,7 @@ package com.arcticlauncher.client.menu;
 
 import com.arcticlauncher.client.gfx.Gfx;
 
-/** A small Arctic logo and the launcher's version, so a player can tell the game runs through Arctic. */
+/** A small RICO logo and the launcher's version, so a player can tell the game runs through RICO. */
 public final class Badge {
 	private static final int ICON = 10;
 	private static final int GAP = 4;

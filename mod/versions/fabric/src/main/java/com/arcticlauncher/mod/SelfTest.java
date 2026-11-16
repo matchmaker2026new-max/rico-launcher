@@ -19,7 +19,7 @@ import net.minecraft.client.input.MouseButtonInfo;
 /**
  * Development check, only with {@code -Darctic.selftest=true}: loads the
  * mixin targets, waits for the player's look, then walks through the
- * Arctic screens taking a screenshot of each, and quits. Lets the client
+ * RICO screens taking a screenshot of each, and quits. Lets the client
  * be verified without clicking.
  */
 final class SelfTest {
@@ -281,7 +281,7 @@ final class SelfTest {
 		}
 	}
 
-	/** Screenshot the title, each Arctic menu tab, the HUD editor and a vanilla screen. */
+	/** Screenshot the title, each RICO menu tab, the HUD editor and a vanilla screen. */
 	private static void tour() {
 		Runnable[] steps = {
 				() -> shot("title"),
@@ -317,7 +317,7 @@ final class SelfTest {
 					later(() -> shot("hud-editor"));
 				},
 				() -> {
-					// The game's multiplayer list opens Arctic's in its place.
+					// The game's multiplayer list opens RICO's in its place.
 					Compat.setScreen(new net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen(
 							new net.minecraft.client.gui.screens.TitleScreen()));
 					later(() -> {
@@ -384,7 +384,7 @@ final class SelfTest {
 					TIMER.schedule(() -> Minecraft.getInstance().execute(() -> shot("title-after-switch")), 8, TimeUnit.SECONDS);
 				},
 				() -> {
-					// Right Shift over a vanilla screen opens the Arctic menu.
+					// Right Shift over a vanilla screen opens the RICO menu.
 					//#if MC >= 26.3
 					Minecraft mc = Minecraft.getInstance();
 					mc.keyboardHandler.keyPress(mc.getWindow().handle(), com.arcticlauncher.mod.compat.KeyCodes.PRESS,
@@ -396,7 +396,7 @@ final class SelfTest {
 					//#endif
 				},
 				() -> {
-					// Leaving a world or a menu ends in setScreen(null): must be Arctic's title.
+					// Leaving a world or a menu ends in setScreen(null): must be RICO's title.
 					Compat.setScreen(null);
 					ArcticMod.LOG.info("selftest: back to title is {}", name(Compat.screen()));
 				},

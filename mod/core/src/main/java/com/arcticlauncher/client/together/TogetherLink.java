@@ -8,7 +8,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 
 /**
- * Play together from the game, through Arctic Launcher's local bridge: host
+ * Play together from the game, through RICO Launcher's local bridge: host
  * the world you opened to LAN, or join a friend's code. The launcher runs
  * the tunnel; this asks it and reads its state back.
  */

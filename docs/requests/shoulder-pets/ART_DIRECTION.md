@@ -2,7 +2,7 @@
 
 The first Shadow Pup, Ember Hatchling and Cloud Wisp meshes failed visual review. The replacement pup and wisp use textured meshes. The dragon uses its earlier vertex-painted palette again: the textured export suppressed its hand-painted color patches. Its lower jaw now opens before one short breath in a 4.8-second loop and closes after five emissive flame tongues travel forward and upward. All three pets have a short eyelid blink baked into their GLB idle animation; see the [open/closed comparison](blink-check.png). The three replacements are listed in `cosmetics.json`; reproducible sources are in `source/`.
 
-The model shape must establish the animal before small details are added. Paint a restrained pixel texture with an intentional light-to-dark ramp on each material; a single flat color per face is insufficient. Keep the texture density consistent across pieces. Model and paint in Blockbench or an equivalent voxel-art tool, and export an animated GLB for Arctic. Do not substitute a high-quality render for a weak model.
+The model shape must establish the animal before small details are added. Paint a restrained pixel texture with an intentional light-to-dark ramp on each material; a single flat color per face is insufficient. Keep the texture density consistent across pieces. Model and paint in Blockbench or an equivalent voxel-art tool, and export an animated GLB for RICO. Do not substitute a high-quality render for a weak model.
 
 | Pet | Required silhouette and face | Motion |
 | --- | --- | --- |

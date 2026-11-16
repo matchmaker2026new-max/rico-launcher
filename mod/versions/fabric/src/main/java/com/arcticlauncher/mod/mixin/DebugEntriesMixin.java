@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.Shadow;
 //#endif
 
 /**
- * The Hitboxes mod: the game draws entity hitboxes while its debug list says they are on. Arctic's switch
+ * The Hitboxes mod: the game draws entity hitboxes while its debug list says they are on. RICO's switch
  * says so without touching the player's own debug profile (which is saved to disk).
  */
 @Mixin(DebugScreenEntryList.class)
@@ -38,7 +38,7 @@ abstract class DebugEntriesMixin implements DebugListRebuild {
 		rebuildCurrentList();
 	}
 
-	/** The list the game reads each frame carries Arctic's entries, so a switch takes effect at once, not after a rejoin. */
+	/** The list the game reads each frame carries RICO's entries, so a switch takes effect at once, not after a rejoin. */
 	@Inject(method = "rebuildCurrentList", at = @At("TAIL"), require = 0)
 	@SuppressWarnings({"rawtypes", "unchecked"})
 	private void arctic$addEntries(CallbackInfo ci) {

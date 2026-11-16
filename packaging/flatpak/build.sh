@@ -23,7 +23,7 @@ flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/fl
 flatpak install --user --assumeyes --noninteractive flathub \
   "org.freedesktop.Platform//$runtime" "org.freedesktop.Sdk//$runtime"
 flatpak build-init "$build" "$app" org.freedesktop.Sdk org.freedesktop.Platform "$runtime"
-install -Dm755 "$input/arctic-launcher" "$build/files/bin/arctic-launcher"
+install -Dm755 "$input/rico-launcher" "$build/files/bin/rico-launcher"
 install -Dm755 "$input/arctic" "$build/files/bin/arctic"
 install -Dm644 "$input/icon.png" "$build/files/share/icons/hicolor/256x256/apps/$app.png"
 install -Dm644 "$here/$app.desktop" "$build/files/share/applications/$app.desktop"
@@ -50,7 +50,7 @@ test -s "$build/files/share/app-info/xmls/$app.xml.gz"
 
 # Java games still need X11 on Wayland desktops. Network is also used by login and local
 # game/voice bridges. File picking uses XDG portals.
-flatpak build-finish "$build" --command=arctic-launcher \
+flatpak build-finish "$build" --command=rico-launcher \
   --share=network --share=ipc --socket=wayland --socket=x11 --socket=pulseaudio \
   --device=dri \
   --talk-name=org.kde.StatusNotifierWatcher \
@@ -61,7 +61,7 @@ flatpak build-update-repo --gpg-sign="$key" --generate-static-deltas \
 flatpak build-bundle --repo-url="$base_url/repo/" \
   --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
   --gpg-keys="$here/public-key.gpg" "$repo" \
-  "$output/downloads/arctic-launcher-linux-x64.flatpak" "$app" stable
+  "$output/downloads/rico-launcher-linux-x64.flatpak" "$app" stable
 
 public_key=$(base64 -w0 "$here/public-key.gpg")
 cat > "$output/site/arctic.flatpakref" <<EOF
@@ -78,7 +78,7 @@ cat > "$output/site/arctic.flatpakrepo" <<EOF
 [Flatpak Repo]
 Title=RICO
 Url=$base_url/repo/
-Homepage=https://arcticlauncher.com
+Homepage=https://github.com/matchmaker2026new-max/rico-launcher
 Description=Official RICO updates
 GPGKey=$public_key
 EOF
@@ -86,4 +86,4 @@ cp "$here/public-key.gpg" "$output/site/public-key.gpg"
 cp "$here/index.html" "$output/site/index.html"
 cp "$input/icon.png" "$output/site/icon.png"
 cp "$output/site/arctic.flatpakref" "$output/downloads/arctic.flatpakref"
-(cd "$output/downloads" && sha256sum -- arctic-launcher-linux-x64.flatpak arctic.flatpakref > FLATPAK-SHA256SUMS.txt)
+(cd "$output/downloads" && sha256sum -- rico-launcher-linux-x64.flatpak arctic.flatpakref > FLATPAK-SHA256SUMS.txt)

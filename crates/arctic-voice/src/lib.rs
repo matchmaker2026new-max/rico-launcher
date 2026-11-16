@@ -1,5 +1,5 @@
-//! Proximity voice chat for Arctic: the microphone is captured in 20 ms
-//! frames, compressed with Opus and sent to nearby Arctic players; their
+//! Proximity voice chat for RICO: the microphone is captured in 20 ms
+//! frames, compressed with Opus and sent to nearby RICO players; their
 //! voices come back through a jitter buffer and are mixed in stereo by
 //! where they stand relative to you (louder when close, from the left or
 //! right as they are). The network and the game's positions are supplied

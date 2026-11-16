@@ -26,7 +26,7 @@ import org.apache.logging.log4j.Logger;
 /**
  * Plugin-channel messages on 1.8-1.12, where a channel is a plain string and the server's channel
  * list comes on {@code REGISTER}: Simple Voice Chat's secret request and answer, and the hello that
- * Arctic ({@code arctic:hello}) and Polarium ({@code polarium:hello}) give a server that lists them,
+ * RICO ({@code arctic:hello}) and Polarium ({@code polarium:hello}) give a server that lists them,
  * once per connection. Same behaviour as the modern adapter's {@code SvcPayload} and {@code Greeter}.
  */
 public final class LegacySvc {
@@ -37,9 +37,9 @@ public final class LegacySvc {
 	static final String REGISTER = "REGISTER";
 	static final String SECRET = "voicechat:secret";
 	static final String REQUEST = "voicechat:request_secret";
-	/** Tells a server that wants to know that Arctic is here (see {@link #hello()}). */
+	/** Tells a server that wants to know that RICO is here (see {@link #hello()}). */
 	static final String HELLO = "arctic:hello";
-	/** The same for Polarium, which relies on Arctic to say it when both are installed. */
+	/** The same for Polarium, which relies on RICO to say it when both are installed. */
 	static final String POLARIUM_HELLO = "polarium:hello";
 
 	/** Anything bigger isn't a secret. */
@@ -57,9 +57,9 @@ public final class LegacySvc {
 
 	private LegacySvc() {}
 
-	/** Whether Arctic reads this channel itself. */
+	/** Whether RICO reads this channel itself. */
 	public static boolean handles(String channel) {
-		// The hello and the server's channel list are Arctic's own, whether or not voice chat is.
+		// The hello and the server's channel list are RICO's own, whether or not voice chat is.
 		return REGISTER.equals(channel) || HELLO.equals(channel) || POLARIUM_HELLO.equals(channel)
 				|| (ENABLED && (SECRET.equals(channel) || REQUEST.equals(channel)));
 	}
@@ -76,7 +76,7 @@ public final class LegacySvc {
 		return data;
 	}
 
-	/** What the server sent on a channel Arctic {@linkplain #handles handles}: its channel list or its voice chat secret. */
+	/** What the server sent on a channel RICO {@linkplain #handles handles}: its channel list or its voice chat secret. */
 	public static void received(ClientConnection connection, String channel, byte[] data) {
 		if (REGISTER.equals(channel)) {
 			greet(connection, channelsIn(data));
@@ -139,8 +139,8 @@ public final class LegacySvc {
 	}
 
 	/**
-	 * The one message Arctic sends a server that asked for it: the mod's version and that the
-	 * launcher is Arctic, as UTF-8 JSON. Nothing about the player or the PC.
+	 * The one message RICO sends a server that asked for it: the mod's version and that the
+	 * launcher is RICO, as UTF-8 JSON. Nothing about the player or the PC.
 	 */
 	private static byte[] hello() {
 		ModContainer arctic = FabricLoader.getInstance().getModContainer("arctic").orElse(null);

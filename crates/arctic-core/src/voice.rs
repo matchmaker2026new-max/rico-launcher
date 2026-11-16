@@ -1,4 +1,4 @@
-//! Voice rooms on the Arctic server: one per Minecraft server, named by a
+//! Voice rooms on the RICO server: one per Minecraft server, named by a
 //! hash of its address (the address itself never leaves this PC). Checking
 //! in returns the other members, whose launchers we connect to directly.
 

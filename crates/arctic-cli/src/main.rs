@@ -1,4 +1,4 @@
-//! `arctic`: headless command-line interface to Arctic Launcher.
+//! `arctic`: headless command-line interface to RICO Launcher.
 //!
 //! Exit codes: 0 success, 1 error, 2 usage error (from clap), and with
 //! `launch --wait` the game's own exit code.

@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Menus outside a world show the Arctic night instead of the panorama (1.20.6+) or the dirt
+ * Menus outside a world show the RICO night instead of the panorama (1.20.6+) or the dirt
  * background (before; the title screen's own panorama is TitleScreenMixin's).
  */
 @Mixin(Screen.class)
@@ -30,7 +30,7 @@ abstract class ScreenMixin {
 		com.arcticlauncher.mod.ArcticButton.layout((Screen) (Object) this);
 	}
 
-	/** The pause menu names Arctic in its corner. */
+	/** The pause menu names RICO in its corner. */
 	@Inject(method = "extractRenderState", at = @At("TAIL"))
 	//#if MC >= 1.20
 	private void arctic$badge(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta, CallbackInfo ci) {

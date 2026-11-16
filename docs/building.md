@@ -12,8 +12,8 @@
 ## Build
 
 ```sh
-git clone https://github.com/brksfrb/arctic-launcher
-cd arctic-launcher
+git clone https://github.com/matchmaker2026new-max/rico-launcher
+cd rico-launcher
 cargo build --release -p arctic-app -p arctic-cli
 ```
 
@@ -21,7 +21,7 @@ This produces:
 
 | Binary | Windows | Linux |
 |---|---|---|
-| Launcher | `target/release/arctic-launcher.exe` | `target/release/arctic-launcher` |
+| Launcher | `target/release/rico-launcher.exe` | `target/release/rico-launcher` |
 | Command line | `target/release/arctic.exe` | `target/release/arctic` |
 
 Run the launcher directly with `cargo run --release -p arctic-app`.

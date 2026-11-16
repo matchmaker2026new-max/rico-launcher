@@ -5,7 +5,7 @@ import com.arcticlauncher.client.Platform;
 import com.arcticlauncher.client.config.ClientConfig;
 import java.util.UUID;
 
-/** Where the Arctic badge (the snowflake) shows, and for whom. */
+/** Where the RICO badge (the snowflake) shows, and for whom. */
 public final class Badge {
 	/** {@link ClientConfig#badgeWhere}: the player list and name tags. */
 	public static final int BOTH = 0;

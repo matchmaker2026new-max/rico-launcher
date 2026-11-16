@@ -1,8 +1,8 @@
-//! Polarium (Arctic's own entity-rendering performance mod) is part of the
+//! Polarium (RICO's own entity-rendering performance mod) is part of the
 //! Performance switch: its jars come with the launcher (mod/dist/polarium,
 //! copied from the Polarium repository's releases) rather than from
 //! Modrinth, and are kept in sync in each instance's mods folder like the
-//! Arctic Client. An instance that has Polarium already (the player's own
+//! RICO Client. An instance that has Polarium already (the player's own
 //! copy) is left with that one.
 
 use std::fs;
