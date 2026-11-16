@@ -1,0 +1,667 @@
+use std::io::Write;
+use std::path::Path;
+
+use serde_json::json;
+
+use super::*;
+use crate::loaders::LoaderKind;
+
+/// A jar holding `files` (name, content).
+fn jar(path: &Path, files: &[(&str, &str)]) {
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(path).unwrap());
+    for (name, text) in files {
+        zip.start_file(*name, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(text.as_bytes()).unwrap();
+    }
+    zip.finish().unwrap();
+}
+
+fn write(path: &Path, text: &str) {
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, text).unwrap();
+}
+
+fn fabric_mod(id: &str, version: &str, mc: &str) -> String {
+    json!({"schemaVersion": 1, "id": id, "version": version, "depends": {"minecraft": mc}})
+        .to_string()
+}
+
+#[test]
+fn reads_each_instance_format() {
+    let root = tempfile::tempdir().unwrap();
+    let r = root.path();
+    // Prism / MultiMC
+    write(
+        &r.join("prism/instance.cfg"),
+        "InstanceType=OneSix\nname=Fabric Fun\nOverrideMemory=true\nMaxMemAlloc=6144\n",
+    );
+    write(
+        &r.join("prism/mmc-pack.json"),
+        &json!({"components": [{"uid": "net.minecraft", "version": "1.21.4"}, {"uid": "net.fabricmc.fabric-loader", "version": "0.16.10"}]}).to_string(),
+    );
+    std::fs::create_dir_all(r.join("prism/.minecraft")).unwrap();
+    // CurseForge
+    write(
+        &r.join("cf/minecraftinstance.json"),
+        &json!({"name": "Big Pack", "gameVersion": "1.20.1", "baseModLoader": {"name": "forge-47.2.0"}, "isMemoryOverride": true, "allocatedMemory": 8192}).to_string(),
+    );
+    // ATLauncher
+    write(
+        &r.join("atl/instance.json"),
+        &json!({"id": "1.21.1", "launcher": {"name": "Neo", "loaderVersion": {"type": "NeoForge", "version": "21.1.234"}, "maximumMemory": 4096}}).to_string(),
+    );
+    std::fs::create_dir_all(r.join("atl/disabledmods")).unwrap();
+    // GDLauncher
+    write(
+        &r.join("gdl/instance.json"),
+        &json!({"name": "Quilty", "game_configuration": {"version": {"release": "1.20.4", "modloaders": [{"type": "Quilt", "version": "0.26.0"}]}, "memory": {"min_mb": 1024, "max_mb": 3072}}}).to_string(),
+    );
+    let scan = scan_folder(r);
+    let by = |name: &str| {
+        scan.instances
+            .iter()
+            .find(|f| f.name == name)
+            .unwrap_or_else(|| panic!("{name} missing"))
+    };
+    let prism = by("Fabric Fun");
+    assert_eq!(prism.game_version, "1.21.4");
+    assert_eq!(
+        prism.loader,
+        Some(FoundLoader {
+            kind: LoaderKind::Fabric,
+            version: Some("0.16.10".into())
+        })
+    );
+    assert_eq!(prism.memory_mb, Some(6144));
+    assert!(prism.game_dir.ends_with(".minecraft"));
+    let cf = by("Big Pack");
+    assert_eq!(
+        cf.loader.as_ref().unwrap().version.as_deref(),
+        Some("47.2.0")
+    );
+    assert_eq!(cf.memory_mb, Some(8192));
+    let atl = by("Neo");
+    assert_eq!(atl.loader.as_ref().unwrap().kind, LoaderKind::NeoForge);
+    assert!(atl.disabled_mods_dir.is_some());
+    let gdl = by("Quilty");
+    assert_eq!(gdl.loader.as_ref().unwrap().kind, LoaderKind::Quilt);
+    assert!(gdl.game_dir.ends_with("instance"));
+}
+
+#[test]
+fn tells_what_a_version_folder_runs() {
+    let root = tempfile::tempdir().unwrap();
+    let versions = root.path().join("versions");
+    // Vanilla, with a BOM (TLauncher writes one).
+    write(
+        &versions.join("1.20.1/1.20.1.json"),
+        &format!(
+            "\u{feff}{}",
+            json!({"id": "1.20.1", "mainClass": "net.minecraft.client.main.Main", "downloads": {"client": {"sha1": "abc"}}})
+        ),
+    );
+    // A merged TLauncher Forge version: no name fields, only libraries.
+    write(
+        &versions.join("Forge 1.20.1/Forge 1.20.1.json"),
+        &json!({"id": "Forge 1.20.1", "mainClass": "cpw.mods.bootstraplauncher.BootstrapLauncher", "downloads": {"client": {"sha1": "abc"}},
+                "libraries": [{"name": "net.minecraftforge:fmlloader:1.20.1-47.4.0"}]}).to_string(),
+    );
+    // NeoForge named only in the extra file.
+    write(
+        &versions.join("Pack/Pack.json"),
+        &json!({"id": "Pack", "mainClass": "x"}).to_string(),
+    );
+    write(
+        &versions.join("Pack/TLauncherAdditional.json"),
+        &json!({"additionalFiles": [{"path": "libraries/net/neoforged/neoforge/21.4.157/neoforge-21.4.157-client.jar"},
+                                    {"path": "libraries/net/minecraft/client/1.21.4-20241203.161809/client.jar"}]}).to_string(),
+    );
+    // Official-launcher Fabric: inherits from vanilla.
+    write(
+        &versions.join("fabric-loader-0.16.10-1.20.1/fabric-loader-0.16.10-1.20.1.json"),
+        &json!({"id": "fabric-loader-0.16.10-1.20.1", "inheritsFrom": "1.20.1", "libraries": [{"name": "net.fabricmc:fabric-loader:0.16.10"}]}).to_string(),
+    );
+    let vanilla = detect::vanilla_by_client(&versions);
+    let info = |id: &str| detect::version_info(&versions, id, &vanilla).unwrap();
+    let forge = info("Forge 1.20.1");
+    assert_eq!(forge.game_version, "1.20.1");
+    assert_eq!(forge.loader.unwrap().version.as_deref(), Some("47.4.0"));
+    let pack = info("Pack");
+    assert_eq!(pack.game_version, "1.21.4");
+    assert_eq!(
+        pack.loader.unwrap(),
+        FoundLoader {
+            kind: LoaderKind::NeoForge,
+            version: Some("21.4.157".into())
+        }
+    );
+    let fabric = info("fabric-loader-0.16.10-1.20.1");
+    assert_eq!(fabric.game_version, "1.20.1");
+    assert_eq!(fabric.loader.unwrap().kind, LoaderKind::Fabric);
+    assert_eq!(info("1.20.1").loader, None);
+}
+
+fn shared_found(dir: &Path, kind: LoaderKind) -> Found {
+    Found {
+        launcher: Launcher::Official,
+        name: "test".into(),
+        game_version: "1.21.4".into(),
+        loader: Some(FoundLoader {
+            kind,
+            version: None,
+        }),
+        game_dir: dir.to_path_buf(),
+        mods_dir: None,
+        shared: true,
+        memory_mb: None,
+        extra_jars: Vec::new(),
+        disabled_mods_dir: None,
+        extra_dirs: Vec::new(),
+        into_vanilla: false,
+        notes: Vec::new(),
+    }
+}
+
+#[test]
+fn shared_folders_bring_only_fitting_mods_and_no_secrets() {
+    let root = tempfile::tempdir().unwrap();
+    let g = root.path();
+    jar(
+        &g.join("mods/fab.jar"),
+        &[("fabric.mod.json", &fabric_mod("fab", "1.0", "*"))],
+    );
+    jar(
+        &g.join("mods/frg.jar"),
+        &[("META-INF/mods.toml", "[[mods]]\nmodId=\"frg\"\n")],
+    );
+    // Made for both: stays for either loader.
+    jar(
+        &g.join("mods/both.jar"),
+        &[
+            ("fabric.mod.json", &fabric_mod("both", "1.0", "*")),
+            ("META-INF/mods.toml", "[[mods]]\nmodId=\"both\"\n"),
+        ],
+    );
+    jar(
+        &g.join("mods/optifine.jar"),
+        &[("optifine/Config.class", "x")],
+    );
+    write(&g.join("options.txt"), "fov:0.5");
+    write(&g.join("launcher_accounts.json"), "{\"secret\": 1}");
+    write(&g.join("saves/World/level.dat"), "x");
+    let sizes = measure(&shared_found(g, LoaderKind::Fabric));
+    assert_eq!(sizes.counts.get(&Category::Mods), Some(&3));
+    assert_eq!(sizes.other_loader, vec!["frg.jar".to_owned()]);
+    assert_eq!(
+        sizes.counts.get(&Category::Settings),
+        Some(&1),
+        "only options.txt"
+    );
+    assert_eq!(
+        sizes.counts.get(&Category::Worlds),
+        None,
+        "worlds come with the Vanilla entry"
+    );
+}
+
+#[test]
+fn own_folders_skip_launcher_files_and_secrets() {
+    let root = tempfile::tempdir().unwrap();
+    let g = root.path();
+    for f in [
+        "options.txt",
+        "servers.dat",
+        "instance.cfg",
+        "mmc-pack.json",
+        "usercache.json",
+        "my_token_cache.json",
+        "latest.log",
+    ] {
+        write(&g.join(f), "x");
+    }
+    write(&g.join("config/mod.toml"), "a=1");
+    write(&g.join("logs/latest.log"), "x");
+    write(&g.join("saves/W/level.dat"), "x");
+    write(&g.join("saves/W/session.lock"), "x");
+    let mut f = shared_found(g, LoaderKind::Fabric);
+    f.shared = false;
+    let sizes = measure(&f);
+    // options.txt, servers.dat, config/
+    assert_eq!(sizes.counts.get(&Category::Settings), Some(&3));
+    assert_eq!(sizes.counts.get(&Category::Worlds), Some(&1));
+    assert_eq!(
+        sizes.bytes.get(&Category::Worlds),
+        Some(&1),
+        "session.lock stays behind"
+    );
+}
+
+#[test]
+fn keeps_the_newest_of_duplicate_mods() {
+    let root = tempfile::tempdir().unwrap();
+    let a = root.path().join("fabric-api-0.140.0.jar");
+    let b = root.path().join("fabric-api-0.141.3.jar");
+    let c = root.path().join("other.jar");
+    jar(
+        &a,
+        &[(
+            "fabric.mod.json",
+            &fabric_mod("fabric-api", "0.140.0+1.21.11", "*"),
+        )],
+    );
+    jar(
+        &b,
+        &[(
+            "fabric.mod.json",
+            &fabric_mod("fabric-api", "0.141.3+1.21.11", "*"),
+        )],
+    );
+    jar(&c, &[("fabric.mod.json", &fabric_mod("other", "1", "*"))]);
+    let kept = detect::newest_only(vec![
+        (a, "a".into()),
+        (b.clone(), "b".into()),
+        (c.clone(), "c".into()),
+    ]);
+    let paths: Vec<_> = kept.into_iter().map(|(p, _)| p).collect();
+    assert_eq!(paths, vec![b, c]);
+}
+
+#[test]
+fn reads_the_loaders_own_description_of_a_jar() {
+    let root = tempfile::tempdir().unwrap();
+    let j = root.path().join("multi.jar");
+    jar(
+        &j,
+        &[
+            ("fabric.mod.json", &fabric_mod("multi", "1", ">=1.21.8")),
+            (
+                "META-INF/mods.toml",
+                "[[dependencies.multi]]\nmodId=\"minecraft\"\nversionRange=\"[1.21,1.22)\"\n",
+            ),
+        ],
+    );
+    assert_eq!(
+        ranges::game_fits(&j, "1.21.4", LoaderKind::Fabric),
+        Some(false)
+    );
+    assert_eq!(
+        ranges::game_fits(&j, "1.21.4", LoaderKind::Forge),
+        Some(true)
+    );
+}
+
+#[test]
+fn finds_missing_required_mods_counting_bundled_ones() {
+    let root = tempfile::tempdir().unwrap();
+    let mods = root.path();
+    // `a` needs `lib` (bundled inside `a`) and `gone` (nowhere).
+    let mut nested = Vec::new();
+    {
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut nested));
+        zip.start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(fabric_mod("lib", "1", "*").as_bytes())
+            .unwrap();
+        zip.finish().unwrap();
+    }
+    let a = json!({"schemaVersion": 1, "id": "a", "version": "1", "depends": {"lib": "*", "gone": "*", "fabricloader": "*", "minecraft": "*"},
+                   "jars": [{"file": "META-INF/jars/lib.jar"}]}).to_string();
+    {
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(mods.join("a.jar")).unwrap());
+        zip.start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(a.as_bytes()).unwrap();
+        zip.start_file(
+            "META-INF/jars/lib.jar",
+            zip::write::SimpleFileOptions::default(),
+        )
+        .unwrap();
+        zip.write_all(&nested).unwrap();
+        zip.finish().unwrap();
+    }
+    // A Forge mod whose `fabric.mod.json` requirements don't count on Forge.
+    jar(
+        &mods.join("forge.jar"),
+        &[
+            (
+                "fabric.mod.json",
+                &json!({"schemaVersion": 1, "id": "f", "version": "1", "depends": {"fabric": "*"}})
+                    .to_string(),
+            ),
+            (
+                "META-INF/mods.toml",
+                "[[mods]]\nmodId=\"f\"\n[[dependencies.f]]\nmodId=\"needed\"\nmandatory=true\nside=\"BOTH\"\n[[dependencies.f]]\nmodId=\"serveronly\"\nmandatory=true\nside=\"SERVER\"\n",
+            ),
+        ],
+    );
+    let fabric: Vec<String> = deps::missing(mods, LoaderKind::Fabric)
+        .into_iter()
+        .map(|m| m.id)
+        .collect();
+    assert!(
+        fabric.contains(&"gone".to_owned()) && !fabric.contains(&"lib".to_owned()),
+        "{fabric:?}"
+    );
+    let forge: Vec<String> = deps::missing(mods, LoaderKind::Forge)
+        .into_iter()
+        .map(|m| m.id)
+        .collect();
+    assert_eq!(forge, vec!["needed".to_owned()]);
+}
+
+#[test]
+fn converts_labymod_and_lunar_huds() {
+    let root = tempfile::tempdir().unwrap();
+    let configs = root.path().join("configs");
+    write(
+        &configs.join("labymod/hud/default.json"),
+        &json!({"configs": {
+            "fps": {"enabled": true, "areaIdentifier": "TOP_LEFT", "x": 2.0, "y": 2.0, "scale": 1.0},
+            "click_test": {"enabled": true, "areaIdentifier": "TOP_LEFT", "x": 2.0, "y": 2.0},
+            "ping": {"enabled": true, "areaIdentifier": "TOP_LEFT", "x": 0.0, "y": 0.0},
+            "speed": {"enabled": true, "areaIdentifier": "TOP_RIGHT", "x": -4.0, "y": 10.0, "scale": 9.0},
+            "helmet": {"enabled": true, "dropzoneId": "item_top_left"},
+            "spotify": {"enabled": true}
+        }}).to_string(),
+    );
+    write(
+        &configs.join("labymod/settings.json"),
+        &json!({"ingame": {"zoom": {"zoomKey": "LEFT_ALT"}}}).to_string(),
+    );
+    let mut scan = Scan::default();
+    hud::labymod(&configs, &mut scan);
+    let c = &scan.clients[0];
+    let h = &c.settings.values["hud"];
+    assert_eq!(h["fps"]["placed"], true);
+    assert_eq!(h["cps"]["placed"], false, "same spot as fps");
+    assert_eq!(h["ping"]["placed"], false, "never moved");
+    assert_eq!(
+        (h["speed"]["ax"].as_i64(), h["speed"]["dx"].as_i64()),
+        (Some(2), Some(4))
+    );
+    assert_eq!(h["speed"]["scale"], 2.5);
+    assert_eq!(h["armor"]["enabled"], true);
+    assert_eq!(h["target"]["enabled"], false);
+    assert_eq!(c.settings.values["zoomKey"], "key.keyboard.left.alt");
+    assert!(c.notes[0].contains("spotify"));
+
+    let lunar = root.path().join("lunar");
+    write(
+        &lunar.join("profile_manager.json"),
+        &json!([{"name": "Default"}, {"name": "../escape"}]).to_string(),
+    );
+    write(
+        &lunar.join("Default/mods.json"),
+        &json!({"FPS": {"enabled": true, "x": 10.0, "y": 6.0, "position": "topLeft"},
+                "COORDINATES": {"x": 10.0, "y": 31.0, "position": "topLeft"},
+                "ARMORSTATUS": {"options": {}},
+                "CLOCK": {"enabled": false}})
+        .to_string(),
+    );
+    let mut scan = Scan::default();
+    hud::lunar(&lunar, &mut scan);
+    assert_eq!(scan.clients.len(), 1);
+    let c = &scan.clients[0];
+    assert_eq!(c.guesses(), vec!["coords".to_owned()]);
+    let chosen = c.with_choices(&["armor".into()]);
+    assert_eq!(chosen.values["hud"]["armor"]["enabled"], true);
+    assert_eq!(chosen.values["hud"]["coords"]["enabled"], false);
+    assert_eq!(chosen.values["hud"]["clock"]["enabled"], false);
+}
+
+fn fabric_jar_with(mods: &Path, file: &str, desc: serde_json::Value) {
+    jar(&mods.join(file), &[("fabric.mod.json", &desc.to_string())]);
+}
+
+#[test]
+fn a_mod_that_refuses_only_old_versions_offers_the_update_first() {
+    // Continuity 3.0.0 for 1.21.4 breaks Sodium before 0.6.6; 0.6.13 is fine.
+    let root = tempfile::tempdir().unwrap();
+    let mods = root.path();
+    fabric_jar_with(
+        mods,
+        "continuity.jar",
+        json!({"id": "continuity", "name": "Continuity", "version": "3.0.0+1.21.4", "breaks": {"sodium": "<0.6.6"}}),
+    );
+    fabric_jar_with(
+        mods,
+        "sodium.jar",
+        json!({"id": "sodium", "name": "Sodium", "version": "0.6.5+mc1.21.4"}),
+    );
+    let found = clashes(mods, LoaderKind::Fabric, "1.21.4");
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(
+        found[0].problem,
+        "Continuity needs a newer Sodium (Continuity doesn't run with 0.6.5+mc1.21.4)"
+    );
+    assert_eq!(found[0].fixes[0].label(), "Update Sodium");
+    // With today's Sodium: no clash at all.
+    fabric_jar_with(
+        mods,
+        "sodium.jar",
+        json!({"id": "sodium", "name": "Sodium", "version": "0.6.13+mc1.21.4"}),
+    );
+    assert!(clashes(mods, LoaderKind::Fabric, "1.21.4").is_empty());
+}
+
+#[test]
+fn finds_mods_that_stop_the_game_together() {
+    let root = tempfile::tempdir().unwrap();
+    let mods = root.path();
+    // The same mod twice: the older one goes.
+    fabric_jar_with(
+        mods,
+        "sodium-old.jar",
+        json!({"id": "sodium", "name": "Sodium", "version": "0.5.3"}),
+    );
+    fabric_jar_with(
+        mods,
+        "sodium-new.jar",
+        json!({"id": "sodium", "name": "Sodium", "version": "0.5.11"}),
+    );
+    // A mod that breaks another.
+    fabric_jar_with(
+        mods,
+        "optifabric.jar",
+        json!({"id": "optifabric", "name": "OptiFabric", "version": "1.14", "breaks": {"sodium": "*"}}),
+    );
+    // Needs a newer library than the one there, and one that isn't there.
+    fabric_jar_with(
+        mods,
+        "lib.jar",
+        json!({"id": "cloth-config", "name": "Cloth Config", "version": "11.0.0"}),
+    );
+    fabric_jar_with(
+        mods,
+        "menu.jar",
+        json!({"id": "modmenu", "name": "Mod Menu", "version": "9.0.0",
+        "depends": {"cloth-config": ">=13.0.0", "fabric-api": "*", "minecraft": "1.20.1"}}),
+    );
+    // Switched off: not counted.
+    write(&mods.join("other.jar.disabled"), "not a jar");
+
+    let found = clashes(mods, LoaderKind::Fabric, "1.21.1");
+    let problems: Vec<&str> = found.iter().map(|c| c.problem.as_str()).collect();
+
+    assert!(
+        problems.contains(&"Sodium is in the mods folder 2 times"),
+        "{problems:?}"
+    );
+    let dup = found
+        .iter()
+        .find(|c| c.problem.starts_with("Sodium is"))
+        .unwrap();
+    assert_eq!(
+        dup.fixes,
+        vec![Fix::TurnOff {
+            file: "sodium-old.jar".into(),
+            name: "Sodium 0.5.3".into()
+        }]
+    );
+    // Once per pair, though both Sodium copies are hit.
+    assert_eq!(
+        problems
+            .iter()
+            .filter(|p| p.contains("can't run together"))
+            .count(),
+        1
+    );
+    assert!(
+        problems.contains(&"Mod Menu needs Fabric API, which isn't installed"),
+        "{problems:?}"
+    );
+    assert!(
+        problems.contains(&"Mod Menu needs a newer Cloth Config (it has 11.0.0)"),
+        "{problems:?}"
+    );
+    let update = found
+        .iter()
+        .find(|c| c.problem.contains("newer Cloth"))
+        .unwrap();
+    assert_eq!(update.fixes[0].label(), "Update Cloth Config");
+    assert!(
+        problems.contains(&"Mod Menu 9.0.0 is made for another Minecraft version, not 1.21.1"),
+        "{problems:?}"
+    );
+}
+
+#[test]
+fn a_clean_folder_and_forge_incompatibilities() {
+    let root = tempfile::tempdir().unwrap();
+    let mods = root.path();
+    fabric_jar_with(
+        mods,
+        "api.jar",
+        json!({"id": "fabric-api", "name": "Fabric API", "version": "0.100.0"}),
+    );
+    fabric_jar_with(
+        mods,
+        "menu.jar",
+        json!({"id": "modmenu", "version": "9.0.0", "depends": {"fabric-api": ">=0.90.0"}}),
+    );
+    assert!(clashes(mods, LoaderKind::Fabric, "1.21.1").is_empty());
+
+    let forge = root.path().join("forge");
+    jar(
+        &forge.join("a.jar"),
+        &[(
+            "META-INF/mods.toml",
+            "[[mods]]\nmodId=\"a\"\ndisplayName=\"Alpha\"\nversion=\"1.0\"\n[[dependencies.a]]\nmodId=\"b\"\ntype=\"incompatible\"\n",
+        )],
+    );
+    jar(
+        &forge.join("b.jar"),
+        &[(
+            "META-INF/mods.toml",
+            "[[mods]]\nmodId=\"b\"\ndisplayName=\"Beta\"\nversion=\"${file.jarVersion}\"\n",
+        )],
+    );
+    let found = clashes(&forge, LoaderKind::Forge, "1.20.1");
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].problem, "Alpha and Beta can't run together");
+}
+
+#[test]
+fn the_launchers_own_jars_left_from_another_version_are_not_reported() {
+    // An instance's mods moved to a 1.21.11 instance: the Arctic Client and Polarium of the old
+    // version are still in the folder, and the launcher replaces them when it starts.
+    let root = tempfile::tempdir().unwrap();
+    let game_dir = root.path();
+    let mods = game_dir.join("mods");
+    std::fs::create_dir_all(&mods).unwrap();
+    for file in ["arctic-mod.jar", "polarium-arctic.jar"] {
+        fabric_jar_with(
+            &mods,
+            file,
+            json!({"id": file, "name": file, "version": "1.0.0", "depends": {"minecraft": "26.3"}}),
+        );
+    }
+    fabric_jar_with(
+        &mods,
+        "someone-elses.jar",
+        json!({"id": "other", "name": "Other", "version": "1.0.0", "depends": {"minecraft": "26.3"}}),
+    );
+    let found = clashes(&mods, LoaderKind::Fabric, "1.21.11");
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].problem.starts_with("Other"), "{found:?}");
+}
+
+#[test]
+fn reads_sklauncher_3_profiles_and_4_instances() {
+    let root = tempfile::tempdir().unwrap();
+    let r = root.path();
+    // 3.x: the shared .minecraft, told apart by its own folder; the Fabric
+    // version isn't downloaded yet (SKlauncher fetches it on the first Play).
+    let mc = r.join(".minecraft");
+    write(&mc.join("sklauncher/sklauncher.json"), "{}");
+    write(
+        &mc.join("launcher_profiles.json"),
+        &json!({"profiles": {
+            "a1": {"name": "Fabric 26.3", "type": "custom", "lastVersionId": "fabric-loader-0.20.1-26.3",
+                   "gameDir": mc.join("instances/Fabric_26.3"), "memoryMax": 3072,
+                   "javaArgs": "-Xmx1G -XX:+UseG1GC"},
+            "b2": {"name": "", "type": "latest-release"},
+        }, "version": 6})
+        .to_string(),
+    );
+    std::fs::create_dir_all(mc.join("instances/Fabric_26.3")).unwrap();
+    let mut scan = Scan::default();
+    sources::minecraft_profiles(&mut scan, &mc);
+    let fabric = scan
+        .instances
+        .iter()
+        .find(|f| f.name == "Fabric 26.3")
+        .expect("fabric profile");
+    assert_eq!(fabric.launcher, Launcher::SkLauncher);
+    assert_eq!(fabric.game_version, "26.3");
+    assert_eq!(fabric.loader.as_ref().unwrap().kind, LoaderKind::Fabric);
+    assert_eq!(
+        fabric.loader.as_ref().unwrap().version.as_deref(),
+        Some("0.20.1")
+    );
+    assert_eq!(fabric.memory_mb, Some(3072));
+    assert!(!fabric.shared);
+    assert!(scan.instances.iter().any(|f| f.into_vanilla));
+
+    // 4.x: its own folder, with the instance folders moved by location.json.
+    let base = r.join("sk4");
+    let data = r.join("moved");
+    write(
+        &base.join("location.json"),
+        &json!({"dataDir": data}).to_string(),
+    );
+    write(
+        &base.join("instances.json"),
+        &json!({"instances": [
+            {"id": "latest-snapshot", "name": "Latest Snapshot", "type": "latest-snapshot"},
+            {"id": "pvp", "name": "PvP", "type": "custom", "gameType": "neoforge",
+             "minecraftVersion": "1.21.1", "loaderVersion": "21.1.172", "memoryMax": 4096},
+            {"id": "old", "name": "Old", "type": "custom", "gameType": "liteloader",
+             "minecraftVersion": "1.12.2"},
+            {"id": "gone", "name": "Gone", "type": "custom", "gameType": "vanilla",
+             "minecraftVersion": "1.20.1"},
+        ]})
+        .to_string(),
+    );
+    std::fs::create_dir_all(data.join("instances/pvp")).unwrap();
+    std::fs::create_dir_all(data.join("instances/old")).unwrap();
+    let mut scan = Scan::default();
+    sources::sklauncher_4(&mut scan, &base);
+    let names: Vec<_> = scan.instances.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, ["PvP", "Old"]);
+    let pvp = &scan.instances[0];
+    assert_eq!(pvp.loader.as_ref().unwrap().kind, LoaderKind::NeoForge);
+    assert_eq!(pvp.memory_mb, Some(4096));
+    assert_eq!(pvp.game_dir, data.join("instances/pvp"));
+    // A loader Arctic doesn't have comes in as plain vanilla, said plainly.
+    assert!(scan.instances[1].loader.is_none());
+    assert!(
+        scan.instances[1]
+            .notes
+            .iter()
+            .any(|n| n.contains("liteloader"))
+    );
+    assert!(scan.seen.iter().any(|(_, why)| why.contains("Gone")));
+}

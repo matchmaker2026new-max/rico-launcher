@@ -1,0 +1,41 @@
+//#if MC >= 1.13
+package com.arcticlauncher.mod.mixin;
+
+import com.arcticlauncher.client.replay.Replays;
+import net.minecraft.client.Minecraft;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+/** A replay moves on before each frame (packets, camera) and grabs it after (video export). */
+@Mixin(Minecraft.class)
+abstract class ReplayFrameMixin {
+	//#if MC >= 1.16
+	// Newer Minecraft forces a render from inside its login/respawn handler.
+	//#if MC >= 1.21.9
+	@Inject(method = "setScreenAndShow", at = @At("HEAD"), cancellable = true)
+	//#else
+	@Inject(method = "forceSetScreen", at = @At("HEAD"), cancellable = true)
+	//#endif
+	private void arctic$seekWithoutForcedFrame(net.minecraft.client.gui.screens.Screen screen, CallbackInfo ci) {
+		if (com.arcticlauncher.mod.replay.ReplayPlayback.INSTANCE.deferSeekFrame(screen)) ci.cancel();
+	}
+	//#endif
+
+	@Inject(method = "runTick", at = @At("HEAD"))
+	private void arctic$replayFrame(boolean advanceGameTime, CallbackInfo ci) {
+		com.arcticlauncher.mod.ReplayTest.frame();
+		Replays.frame(com.arcticlauncher.mod.Compat.screen() != null);
+		// A game controller moves the player and the pointer each frame.
+		com.arcticlauncher.client.ArcticClient.frame(com.arcticlauncher.mod.Compat.screen() != null);
+	}
+
+	//#if MC >= 26.1
+	@Inject(method = "runTick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;renderFrame(Z)V", shift = At.Shift.AFTER))
+	private void arctic$replayFrameDone(boolean advanceGameTime, CallbackInfo ci) {
+		Replays.afterFrame();
+	}
+	//#endif
+}
+//#endif

@@ -1,0 +1,179 @@
+package com.arcticlauncher.mod;
+
+import com.arcticlauncher.client.ArcticClient;
+import com.arcticlauncher.client.config.ClientConfig;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import net.minecraft.client.Minecraft;
+
+/**
+ * Self-test for item physics and motion blur ({@code -Darctic.selftest=visuals}): a fresh world, dropped
+ * items with and without item physics, then the camera turning fast with and without motion blur.
+ * Screenshots go to the game's screenshots folder; the log names each one.
+ */
+final class VisualsTest {
+	private static final ScheduledExecutorService TIMER = Executors.newSingleThreadScheduledExecutor(r -> {
+		Thread t = new Thread(r, "arctic-visualstest");
+		t.setDaemon(true);
+		return t;
+	});
+	private static final int STEP_SECONDS = 4;
+	/** How often the camera turns during the spin, and how far (mouse units). */
+	private static final long TURN_EVERY_MS = 10;
+	private static final double TURN_BY = 30;
+
+	private VisualsTest() {}
+
+	static boolean requested() {
+		return "visuals".equals(System.getProperty("arctic.selftest"));
+	}
+
+	static void start() {
+		ArcticMod.LOG.info("visualstest: scheduled");
+		boolean ghosts = Boolean.getBoolean("arctic.selftest.ghosts");
+		TIMER.schedule(() -> run(() -> WorldTest.createTestWorld(ghosts ? VisualsTest::ghosts : VisualsTest::steps)), 10, TimeUnit.SECONDS);
+	}
+
+	/** Dropped items left behind when their chunks unload and load again ({@code -Darctic.selftest.ghosts=true}). */
+	private static void ghosts() {
+		ClientConfig c = ArcticClient.config();
+		c.itemPhysics = Boolean.parseBoolean(System.getProperty("arctic.selftest.itemphysics", "true"));
+		Runnable[] steps = {
+				() -> {
+					command("tp @s 0 200 0 0 50");
+					command("fill -4 199 -3 4 199 7 minecraft:stone");
+					command("fill -4 200 -3 4 204 7 minecraft:air");
+					for (int i = 0; i < 6; i++) {
+						command("summon item " + (i - 3) + " 201 3 {Item:" + item("diamond", 1) + ",PickupDelay:32767}");
+					}
+				},
+				() -> countItems("dropped"),
+				() -> command("tp @s 6000 200 6000"),
+				null, null,
+				() -> countItems("far away"),
+				() -> command("tp @s 0 200 0 0 50"),
+				null,
+				() -> {
+					countItems("back");
+					WorldTest.shot("ghosts-back");
+				},
+				() -> command("kill @e[type=item]"),
+				() -> {
+					countItems("after kill");
+					WorldTest.shot("ghosts-after-kill");
+				},
+				() -> {
+					ArcticMod.LOG.info("visualstest: done");
+					Minecraft.getInstance().stop();
+				},
+		};
+		for (int i = 0; i < steps.length; i++) {
+			Runnable step = steps[i];
+			if (step != null) {
+				TIMER.schedule(() -> run(step), (long) i * STEP_SECONDS, TimeUnit.SECONDS);
+			}
+		}
+	}
+
+	private static void countItems(String when) {
+		int items = 0;
+		//#if MC >= 1.14
+		for (net.minecraft.world.entity.Entity e : Minecraft.getInstance().level.entitiesForRendering()) {
+		//#else
+		for (net.minecraft.world.entity.Entity e : Minecraft.getInstance().level.loadedEntities) {
+		//#endif
+			if (e instanceof net.minecraft.world.entity.item.ItemEntity) {
+				items++;
+			}
+		}
+		ArcticMod.LOG.info("visualstest: {} item entities {} (item physics {})", items, when, ArcticClient.config().itemPhysics);
+	}
+
+	/** On the game thread; the test window may lose focus, so a pause menu that brings is closed first. */
+	private static void run(Runnable r) {
+		Minecraft.getInstance().execute(() -> {
+			if (Compat.screen() instanceof net.minecraft.client.gui.screens.PauseScreen) {
+				Compat.setScreen(null);
+			}
+			r.run();
+		});
+	}
+
+	/** An item's NBT for /summon: "count" from 1.20.5 (item components), "Count" as a byte before. */
+	private static String item(String id, int count) {
+		//#if MC >= 1.20.5
+		return "{id:\"minecraft:" + id + "\",count:" + count + "}";
+		//#else
+		return "{id:\"minecraft:" + id + "\",Count:" + count + "b}";
+		//#endif
+	}
+
+	private static void command(String command) {
+		Compat.sendChat("/" + command);
+	}
+
+	private static void steps() {
+		ClientConfig c = ArcticClient.config();
+		Runnable[] steps = {
+				() -> {
+					command("time set noon");
+					command("weather clear");
+					// A stone platform in open sky, whatever the world generated around the spawn.
+					command("tp @s ~ 200 ~ 0 50");
+					command("fill ~-4 199 ~-3 ~4 199 ~7 minecraft:stone");
+					command("fill ~-4 200 ~-3 ~4 204 ~7 minecraft:air");
+					// A flat item, a tool, a block and a full stack, a little in front of the player.
+					command("summon item ~ ~1 ~2 {Item:" + item("diamond", 1) + ",PickupDelay:32767}");
+					command("summon item ~1 ~1 ~2.5 {Item:" + item("iron_sword", 1) + ",PickupDelay:32767}");
+					command("summon item ~-1 ~1 ~2.5 {Item:" + item("stone", 1) + ",PickupDelay:32767}");
+					command("summon item ~0.5 ~1 ~3.5 {Item:" + item("apple", 64) + ",PickupDelay:32767}");
+					c.itemPhysics = false;
+				},
+				() -> WorldTest.shot("items-vanilla"),
+				() -> {
+					c.itemPhysics = true;
+				},
+				() -> WorldTest.shot("items-physics"),
+				() -> {
+					command("summon item ~ ~4 ~2 {Item:" + item("gold_ingot", 1) + ",PickupDelay:32767,Motion:[0.0,0.6,0.0]}");
+					TIMER.schedule(() -> run(() -> WorldTest.shot("items-physics-air")), 300, TimeUnit.MILLISECONDS);
+				},
+				() -> {
+					c.motionBlur = false;
+					spin("blur-off");
+				},
+				() -> {
+					c.motionBlur = true;
+					c.motionBlurAmount = 100;
+					spin("blur-max");
+				},
+				() -> {
+					c.motionBlurAmount = 35;
+					spin("blur-medium");
+				},
+				() -> {
+					c.motionBlur = false;
+					c.itemPhysics = false;
+					ArcticMod.LOG.info("visualstest: done");
+					Minecraft.getInstance().stop();
+				},
+		};
+		for (int i = 0; i < steps.length; i++) {
+			Runnable step = steps[i];
+			TIMER.schedule(() -> run(step), (long) i * STEP_SECONDS, TimeUnit.SECONDS);
+		}
+	}
+
+	/** Turn the camera fast for a moment and screenshot while it turns. */
+	private static void spin(String name) {
+		ScheduledFuture<?> turning = TIMER.scheduleAtFixedRate(() -> run(() -> {
+			if (Minecraft.getInstance().player != null) {
+				Minecraft.getInstance().player.turn(TURN_BY, 0);
+			}
+		}), 0, TURN_EVERY_MS, TimeUnit.MILLISECONDS);
+		TIMER.schedule(() -> run(() -> WorldTest.shot(name)), 1500, TimeUnit.MILLISECONDS);
+		TIMER.schedule(() -> turning.cancel(false), 1700, TimeUnit.MILLISECONDS);
+	}
+}

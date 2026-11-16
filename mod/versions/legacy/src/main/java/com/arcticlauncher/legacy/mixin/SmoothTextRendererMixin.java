@@ -1,0 +1,215 @@
+package com.arcticlauncher.legacy.mixin;
+
+import com.arcticlauncher.legacy.LegacySmoothFont;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.font.TextRenderer;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArgs;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
+import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import com.mojang.blaze3d.platform.GlStateManager;
+import org.lwjgl.opengl.GL11;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
+
+/**
+ * The smooth font on 1.8.9 - 1.12.2 (see {@link LegacySmoothFont}): characters are drawn and
+ * measured from Inter, so colours, formatting codes, underlines and wrapping keep working.
+ */
+@Mixin(TextRenderer.class)
+abstract class SmoothTextRendererMixin {
+	@Shadow
+	private float x;
+	@Shadow
+	private float y;
+	/** In obfuscated text (§k): the game swaps each letter for a random one as wide (in whole pixels). */
+	@Shadow
+	private boolean obfuscated;
+	/** In bold text (§l): the game draws every character twice, a whole GUI pixel apart. */
+	@Shadow
+	private boolean bold;
+
+	/** Which of a bold character's two draws this is (they alternate; the second draws nothing here). */
+	private boolean arctic$boldSecond;
+
+	@Shadow
+	public abstract boolean isUnicode();
+
+	@Shadow
+	public abstract int getCharWidth(char c);
+
+	/** Blending was off when this string started, so it's on just for the string. */
+	private boolean arctic$blendForString;
+
+	/**
+	 * A string starts: Inter's edges need blending. Where the game draws text without it (the
+	 * scoreboard's lines are white at ~12% alpha, most HUD text), Minecraft's own font ignores the
+	 * colour's alpha; so does this, or that text would come out faded. One driver query per string.
+	 */
+	@ModifyVariable(method = "drawLayer(Ljava/lang/String;FFIZ)I", at = @At("HEAD"), argsOnly = true, ordinal = 0)
+	private int arctic$blendString(int color) {
+		arctic$blendForString = false;
+		if (!arctic$smooth() || GL11.glIsEnabled(GL11.GL_BLEND)) {
+			return color;
+		}
+		arctic$blendForString = true;
+		GlStateManager.enableBlend();
+		GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+		// Below 0.1 alpha the game's alpha test hides the text anyway: leave that as it is.
+		return (color >>> 24) >= 26 ? color | 0xFF000000 : color;
+	}
+
+	@Inject(method = "drawLayer(Ljava/lang/String;FFIZ)I", at = @At("RETURN"))
+	private void arctic$blendStringDone(String text, float x, float y, int color, boolean shadow, CallbackInfoReturnable<Integer> cir) {
+		if (arctic$blendForString) {
+			arctic$blendForString = false;
+			GlStateManager.disableBlend();
+		}
+	}
+
+	private boolean arctic$smooth() {
+		// Only the game's own renderer: Forge's loading screen has its own, before the game's fonts and
+		// textures exist, and drew black blobs from ours.
+		MinecraftClient mc = MinecraftClient.getInstance();
+		return mc != null && mc.textRenderer == (Object) this && LegacySmoothFont.on() && !isUnicode();
+	}
+
+	@Inject(method = "drawLayer(Ljava/lang/String;FFIZ)I", at = @At("HEAD"))
+	private void arctic$pixelSize(String text, float x, float y, int color, boolean shadow, CallbackInfoReturnable<Integer> cir) {
+		if (arctic$smooth()) {
+			LegacySmoothFont.preparing(x, y);
+		}
+	}
+
+	@Shadow
+	private float drawLayer(char c, boolean italic) {
+		throw new AssertionError();
+	}
+
+	/** One character at the pen; a direct fallback avoids a cancellable callback per vanilla glyph. */
+	@Redirect(method = "draw(Ljava/lang/String;Z)V", at = @At(value = "INVOKE",
+			target = "Lnet/minecraft/client/font/TextRenderer;drawLayer(CZ)F"))
+	private float arctic$draw(TextRenderer renderer, char c, boolean italic) {
+		if (!arctic$smooth()) {
+			return drawLayer(c, italic);
+		}
+		// Bold: the game's way thickens a bitmap font with a second copy a whole pixel over, which on a
+		// thin font (and a big title) reads as two letters. One pass, thickened a little, instead.
+		boolean second = bold && arctic$boldSecond;
+		arctic$boldSecond = bold && !arctic$boldSecond;
+		if (c == ' ') {
+			return arctic$returned(c);
+		}
+		LegacySmoothFont.Glyph glyph = LegacySmoothFont.glyph(c);
+		if (glyph != null) {
+			if (second) {
+				return arctic$returned(c);
+			}
+			LegacySmoothFont.draw(glyph, x, y, italic);
+			if (bold) {
+				LegacySmoothFont.draw(glyph, x + LegacySmoothFont.BOLD_THICKEN, y, italic);
+			}
+			return arctic$returned(c);
+		}
+		return drawLayer(c, italic);
+	}
+
+	/**
+	 * What this glyph tells the renderer to add. The renderer keeps {@code (int) (returned + (bold ? 1 : 0))}.
+	 * Aligned, that whole-pixel step is the same number wrapping and hit-testing sum.
+	 */
+	private float arctic$returned(char c) {
+		if (!LegacySmoothFont.aligned()) {
+			float moved = LegacySmoothFont.advance(c);
+			if (bold) {
+				moved -= 1f - LegacySmoothFont.BOLD_THICKEN;
+			}
+			return obfuscated ? (float) Math.round(moved) : moved;
+		}
+		int step = LegacySmoothFont.step(c);
+		if (step < 0) {
+			return LegacySmoothFont.advance(c);
+		}
+		return com.arcticlauncher.client.feature.TextHit.glyphReturn(step, bold, LegacySmoothFont.BOLD_THICKEN);
+	}
+
+	/** Whole GUI pixels, the same step drawing moves the pen by. */
+	@Inject(method = "getCharWidth", at = @At("HEAD"), cancellable = true)
+	private void arctic$charWidth(char c, CallbackInfoReturnable<Integer> cir) {
+		if (c == '§' || !arctic$smooth()) {
+			return;
+		}
+		int step = LegacySmoothFont.step(c);
+		if (step >= 0) {
+			cir.setReturnValue(step);
+		}
+	}
+
+	/**
+	 * The width the pen moves. With the metrics aligned, that is the sum of {@link LegacySmoothFont#step}
+	 * (bold's sub-pixel thicken does not survive the renderer's cast to int). The old path sums the raw
+	 * advances and rounds up, which is what clicks used to follow.
+	 */
+	@Inject(method = "getStringWidth", at = @At("HEAD"), cancellable = true)
+	private void arctic$stringWidth(String text, CallbackInfoReturnable<Integer> cir) {
+		if (text == null || !arctic$smooth()) {
+			return;
+		}
+		if (LegacySmoothFont.aligned()) {
+			int width = 0;
+			for (int i = 0; i < text.length(); i++) {
+				char c = text.charAt(i);
+				if (c == '§' && i + 1 < text.length()) {
+					i++;
+					continue;
+				}
+				int step = LegacySmoothFont.step(c);
+				width += step >= 0 ? step : Math.max(0, getCharWidth(c));
+			}
+			cir.setReturnValue(width);
+			return;
+		}
+		float width = 0;
+		boolean bold = false;
+		for (int i = 0; i < text.length(); i++) {
+			char c = text.charAt(i);
+			if (c == '§' && i + 1 < text.length()) {
+				char code = Character.toLowerCase(text.charAt(++i));
+				if (code == 'l') {
+					bold = true;
+				} else if (code == 'r' || (code >= '0' && code <= '9') || (code >= 'a' && code <= 'f')) {
+					bold = false;
+				}
+				continue;
+			}
+			float advance = LegacySmoothFont.advance(c);
+			width += advance >= 0 ? advance : Math.max(0, getCharWidth(c));
+			if (bold && advance != 0) {
+				width += LegacySmoothFont.BOLD_THICKEN;
+			}
+		}
+		cir.setReturnValue((int) Math.ceil(width));
+	}
+
+	/** Shadows half a GUI pixel behind the text instead of a whole one (the first draw is the shadow). */
+	@ModifyArgs(method = "draw(Ljava/lang/String;FFIZ)I",
+			at = @At(value = "INVOKE", target = "Lnet/minecraft/client/font/TextRenderer;drawLayer(Ljava/lang/String;FFIZ)I", ordinal = 0))
+	private void arctic$softShadow(Args args) {
+		if (!arctic$smooth()) {
+			return;
+		}
+		float back = 1f - LegacySmoothFont.shadowOffset();
+		args.set(1, (float) args.get(1) - back);
+		args.set(2, (float) args.get(2) - back);
+		// A solid shadow behind thin anti-aliased letters shows through their edges as gray: half the opacity.
+		int shadowColor = args.get(3);
+		int alpha = (shadowColor >>> 24) == 0 ? 255 : shadowColor >>> 24;
+		// Never below 4: the game's font draws a colour with alpha 0 to 3 fully opaque, so the shadow of a fading
+		// chat line (alpha 4 to 7, halved) came out solid black for one frame.
+		args.set(3, (Math.max(4, Math.round(alpha * 0.5f)) << 24) | (shadowColor & 0xFFFFFF));
+	}
+}

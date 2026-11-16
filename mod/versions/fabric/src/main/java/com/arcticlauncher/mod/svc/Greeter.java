@@ -1,0 +1,127 @@
+package com.arcticlauncher.mod.svc;
+
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.network.Connection;
+
+/**
+ * Says hello to a server that lists a hello channel: Arctic's own ({@code arctic:hello}) and Polarium's
+ * ({@code polarium:hello}, on Polarium's behalf), once per connection.
+ *
+ * <p>The server's channel list arrives in {@code minecraft:register}. Without Fabric API the client reads it
+ * itself ({@link SvcPayload}); with Fabric API's networking installed, that module owns the message, so the
+ * list comes from its channel events instead ({@link #listenToFabricApi}). Without this second path nobody
+ * said hello on instances that have Fabric API, and servers thought Polarium wasn't there.
+ */
+public final class Greeter {
+	//#if MC >= 1.18
+	private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger("RICO");
+	//#else
+	// slf4j isn't on the game's classpath before 1.18.
+	private static final org.apache.logging.log4j.Logger LOG = org.apache.logging.log4j.LogManager.getLogger("RICO");
+	//#endif
+	private static Connection greeted;
+	private static final Set<String> GREETINGS = new HashSet<>();
+
+	private Greeter() {}
+
+	/** The server on {@code connection} announced these channels. */
+	public static synchronized void greet(Connection connection, List<String> channels) {
+		if (connection == null || channels.isEmpty()) {
+			return;
+		}
+		boolean arctic = channels.contains(SvcPayload.HELLO.toString());
+		boolean polarium = channels.contains(SvcPayload.POLARIUM_HELLO.toString());
+		if (arctic || polarium) {
+			LOG.info("RICO: the server lists {} channel(s) (arctic:hello {}, polarium:hello {})", channels.size(), arctic, polarium);
+		}
+		if (connection != greeted) {
+			greeted = connection;
+			GREETINGS.clear();
+		}
+		if (channels.contains(SvcPayload.HELLO.toString()) && GREETINGS.add("arctic")) {
+			connection.send(SvcPayload.hello().toPacket());
+			LOG.info("RICO: said arctic:hello");
+		}
+		if (channels.contains(SvcPayload.POLARIUM_HELLO.toString()) && GREETINGS.add("polarium")) {
+			SvcPayload hello = SvcPayload.polariumHello();
+			if (hello != null) {
+				connection.send(hello.toPacket());
+				LOG.info("RICO: said polarium:hello for Polarium");
+			} else {
+				LOG.info("RICO: the server asks for polarium:hello but Polarium isn't loaded");
+			}
+		}
+	}
+
+	/** With Fabric API's networking installed, its channel events carry the server's channel list. */
+	public static void listenToFabricApi() {
+		if (!FabricLoader.getInstance().isModLoaded("fabric-networking-api-v1")) {
+			return;
+		}
+		// Play phase only: servers' plugin channels (Paper's, BotPvP's) only take hellos sent in play.
+		// The event's name changed with Mojang's names (26.1); whichever this Fabric API has is used.
+		if (!hook("net.fabricmc.fabric.api.client.networking.v1.ServerboundPlayChannelEvents")
+				&& !hook("net.fabricmc.fabric.api.client.networking.v1.C2SPlayChannelEvents")) {
+			LOG.warn("RICO: no Fabric API channel event found: servers won't get RICO's or Polarium's hello");
+		}
+	}
+
+	/** {@code <events>.REGISTER.register((handler, sender, client, channels) -> greet(...))}, by name. */
+	private static boolean hook(String events) {
+		ClassLoader loader = Greeter.class.getClassLoader();
+		try {
+			Class<?> owner;
+			try {
+				owner = Class.forName(events, true, loader);
+			} catch (ClassNotFoundException e) {
+				return false;
+			}
+			Object event = owner.getField("REGISTER").get(null);
+			Class<?> callback = Class.forName(events + "$Register", true, loader);
+			Object listener = Proxy.newProxyInstance(callback.getClassLoader(), new Class<?>[] {callback}, (proxy, method, args) -> {
+				if (method.getDeclaringClass() == Object.class) {
+					switch (method.getName()) {
+						case "hashCode":
+							return System.identityHashCode(proxy);
+						case "equals":
+							return proxy == args[0];
+						default:
+							return "RICO hello listener";
+					}
+				}
+				if (args != null && args.length == 4 && args[3] instanceof List<?>) {
+					List<?> ids = (List<?>) args[3];
+					List<String> channels = new ArrayList<>(ids.size());
+					for (Object id : ids) {
+						channels.add(String.valueOf(id));
+					}
+					greet(connectionOf(args[0]), channels);
+				}
+				return null;
+			});
+			Method register = Class.forName("net.fabricmc.fabric.api.event.Event", true, loader).getMethod("register", Object.class);
+			register.invoke(event, listener);
+			LOG.info("RICO: listening for server channels through Fabric API ({})", owner.getSimpleName());
+			return true;
+		} catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+			LOG.warn("RICO: can't listen for server channels through Fabric API ({}): {}", events, e.toString());
+			return false;
+		}
+	}
+
+	private static Connection connectionOf(Object handler) {
+		try {
+			Object connection = handler.getClass().getMethod("getConnection").invoke(handler);
+			return connection instanceof Connection ? (Connection) connection : null;
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			return null;
+		}
+	}
+}

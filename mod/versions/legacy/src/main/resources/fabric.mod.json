@@ -1,0 +1,19 @@
+{
+	"schemaVersion": 1,
+	"id": "arctic",
+	"version": "${version}",
+		"name": "RICO Client",
+		"description": "RICO's Minecraft client: custom menus, HUD widgets, friends and more.",
+		"authors": ["RICO Launcher contributors"],
+		"license": "LicenseRef-RICO-Source-Available-Restricted",
+	"icon": "assets/arctic/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": ["com.arcticlauncher.legacy.ArcticLegacy"]
+	},
+	"mixins": ["arctic-legacy.mixins.json"],
+	"depends": {
+		"fabricloader": ">=0.16.0",
+		"minecraft": ${minecraft_range}
+	}
+}

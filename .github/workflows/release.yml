@@ -1,0 +1,239 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+    # Builds on main (never published) keep a warm cache there: a tag's run
+    # can only restore caches from its own tag or the default branch.
+    branches: [main]
+    paths: ["Cargo.lock", ".github/workflows/release.yml"]
+  # GitHub drops caches unused for 7 days; releases come less often.
+  schedule:
+    - cron: "17 4 */3 * *"
+  # By hand: build everything (test builds, like the Mac app) without publishing.
+  workflow_dispatch: {}
+
+# Read-only by default: the build jobs run third-party actions (and the Mac job holds the Developer ID key).
+# Only the two jobs that create and edit the release get write access.
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Windows and Linux, both on the Ryzen 9 runner (Debian 13; Windows through cargo-xwin). It's a
+  # Flash Hosting node: builds get its spare CPU only. Tags and runs by hand only: it never takes
+  # branch, schedule or pull request jobs (the cache there persists between runs anyway).
+  build:
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, linux, x64, ryzen]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Toolchain and build folder
+        run: |
+          rustup update stable --no-self-update
+          rustup target add x86_64-pc-windows-msvc
+          # Outside the checkout (which is cleaned each run), so later builds reuse it.
+          echo "CARGO_TARGET_DIR=$HOME/arctic-target" >> "$GITHUB_ENV"
+
+      - name: Check tag matches Cargo version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(grep -m1 '^version = ' Cargo.toml | cut -d '"' -f2)
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != v$version"; exit 1; }
+
+      # No tests here: the runner's sandbox has no localhost (some tests talk to themselves over it),
+      # and CI (ci.yml) runs them on every push to main, which a release tag points at.
+
+      - name: Build (Linux)
+        env:
+          # Arctic's own Azure client ID (see docs/microsoft-auth.md). Minecraft
+          # sign-in works once Mojang has approved it; no rebuild needed then.
+          ARCTIC_MSA_CLIENT_ID: ${{ secrets.ARCTIC_MSA_CLIENT_ID }}
+        run: cargo build --release --locked -p arctic-app -p arctic-cli
+
+      - name: Build (Windows)
+        env:
+          ARCTIC_MSA_CLIENT_ID: ${{ secrets.ARCTIC_MSA_CLIENT_ID }}
+        run: |
+          cargo xwin build --release --locked --target x86_64-pc-windows-msvc -p arctic-app -p arctic-cli 2>&1 | tee xwin.log
+          # build.rs only warns when the icon can't go in; a release must have it.
+          if grep -q "could not embed exe icon" xwin.log; then echo "the Windows exe has no icon"; exit 1; fi
+
+      - name: Stage assets
+        run: |
+          mkdir -p dist/windows dist/linux
+          cp "$CARGO_TARGET_DIR/x86_64-pc-windows-msvc/release/arctic-launcher.exe" dist/windows/arctic-launcher-windows-x64.exe
+          cp "$CARGO_TARGET_DIR/x86_64-pc-windows-msvc/release/arctic.exe" dist/windows/arctic-windows-x64.exe
+          cp "$CARGO_TARGET_DIR/release/arctic-launcher" dist/linux/arctic-launcher-linux-x64
+          cp "$CARGO_TARGET_DIR/release/arctic" dist/linux/arctic-linux-x64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/windows/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/linux/*
+
+  # One app for Apple Silicon and Intel Macs.
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check tag matches Cargo version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(grep -m1 '^version = ' Cargo.toml | cut -d '"' -f2)
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != v$version"; exit 1; }
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      - name: Build
+        env:
+          ARCTIC_MSA_CLIENT_ID: ${{ secrets.ARCTIC_MSA_CLIENT_ID }}
+        run: |
+          cargo build --release --locked -p arctic-app -p arctic-cli --target aarch64-apple-darwin
+          cargo build --release --locked -p arctic-app -p arctic-cli --target x86_64-apple-darwin
+
+      # Signs with the Developer ID and notarizes when the Apple secrets are set; without them the app is
+      # ad-hoc signed as before.
+      - name: Apple signing
+        env:
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          if [ -z "$APPLE_CERT_P12" ] || [ -z "$APPLE_API_KEY_P8" ]; then
+            echo "No Apple secrets: the Mac app is ad-hoc signed."
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/arctic.keychain-db"
+          password=$(openssl rand -base64 24)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          echo "$APPLE_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          # Apple's intermediate certificate, so the Developer ID is trusted.
+          curl -fsSL https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$RUNNER_TEMP/dev-id-ca.cer" \
+            && security import "$RUNNER_TEMP/dev-id-ca.cer" -k "$keychain" -A || true
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity=$(security find-identity -v -p codesigning "$keychain" | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)"/\1/')
+          [ -n "$identity" ] || { echo "no Developer ID Application identity found"; security find-identity -p codesigning "$keychain"; exit 1; }
+          echo "Signing as: $identity"
+          echo "$APPLE_API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          {
+            echo "APPLE_SIGN_IDENTITY=$identity"
+            echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8"
+            echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID"
+            echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
+          } >> "$GITHUB_ENV"
+
+      - name: Package
+        run: |
+          version=$(grep -m1 '^version = ' Cargo.toml | cut -d '"' -f2)
+          bash packaging/macos/make-app.sh "$version"
+          mkdir mac-dist
+          cp dist/arctic-launcher-macos.zip dist/arctic-launcher-macos dist/arctic-macos mac-dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: mac-dist/*
+
+  # Windows and Linux go out as soon as they're built (a draft, signed and published from the
+  # maintainer's PC); the Mac app is added when it's ready (mac-assets). Until then the Mac
+  # launcher sees no download for itself and doesn't offer the update.
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "{windows,linux}"
+          path: dist
+          merge-multiple: true
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          chmod +x dist/*linux*
+          # Checksums, so a download can be checked: a file next to the
+          # downloads and a table at the top of the notes.
+          (cd dist && sha256sum -- * > SHA256SUMS.txt)
+          {
+            # What's new, written by hand (docs/release-notes/<tag>.md), above the checksums.
+            if [ -f "docs/release-notes/$GITHUB_REF_NAME.md" ]; then
+              cat "docs/release-notes/$GITHUB_REF_NAME.md"
+              echo
+            fi
+            echo "### SHA-256"
+            echo
+            echo "| File | SHA-256 |"
+            echo "|---|---|"
+            while read -r hash name; do name=${name#\*}; echo "| \`$name\` | \`$hash\` |"; done < dist/SHA256SUMS.txt
+            echo
+            echo "Check a download: \`Get-FileHash <file>\` (PowerShell) or \`sha256sum -c SHA256SUMS.txt\` (Linux)."
+          } > notes.md
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
+          # A draft: the Windows files are signed on the maintainer's PC (Certum's cloud certificate),
+          # which then publishes it: packaging/windows/sign-release.ps1.
+          gh release create "$GITHUB_REF_NAME" dist/* --title "Arctic Launcher $GITHUB_REF_NAME" --notes-file notes.md --generate-notes --draft $prerelease
+
+  # The Mac app, into the release made above (draft or already published): its checksums join
+  # the file and the notes' table.
+  mac-assets:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [macos, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos
+          path: mac
+      - name: Add the Mac app
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          chmod +x mac/arctic-launcher-macos mac/arctic-macos
+          gh release download "$GITHUB_REF_NAME" --pattern SHA256SUMS.txt --dir current --clobber
+          (cd mac && sha256sum -- *) > mac.sums
+          { grep -v -E '  \*?(arctic-launcher-macos|arctic-launcher-macos\.zip|arctic-macos)$' current/SHA256SUMS.txt || true; cat mac.sums; } \
+            | sort -k2 > SHA256SUMS.txt
+          gh release upload "$GITHUB_REF_NAME" mac/* SHA256SUMS.txt --clobber
+          # The notes' checksum table, rebuilt from the file (as sign-release.ps1 does).
+          {
+            echo "### SHA-256"
+            echo
+            echo "| File | SHA-256 |"
+            echo "|---|---|"
+            while read -r hash name; do name=${name#\*}; echo "| \`$name\` | \`$hash\` |"; done < SHA256SUMS.txt
+            echo
+          } > table.md
+          gh release view "$GITHUB_REF_NAME" --json body --jq .body > body.md
+          python3 -c 'import re; b = open("body.md").read(); t = open("table.md").read(); open("notes.md", "w").write(re.sub(r"### SHA-256.*?(?=Check a download)", lambda _: t, b, count=1, flags=re.S))'
+          gh release edit "$GITHUB_REF_NAME" --notes-file notes.md

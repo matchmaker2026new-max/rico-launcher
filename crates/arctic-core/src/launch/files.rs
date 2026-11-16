@@ -1,0 +1,691 @@
+//! Resolving and downloading everything a version needs: client jar,
+//! libraries, natives, assets and the logging config.
+
+use std::collections::HashSet;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use crate::error::IoContext;
+use crate::net::{DownloadJob, download_all};
+use crate::storage::{DataDirs, load_json};
+use crate::versions::model::{Artifact, AssetIndex};
+use crate::versions::{Library, RuleEnv, VersionJson, maven_path, rules_allow};
+use crate::{Error, Result};
+
+const RESOURCES_URL: &str = "https://resources.download.minecraft.net";
+
+/// A legacy natives jar to unpack into the natives directory.
+#[derive(Debug, Clone)]
+pub struct NativeJar {
+    pub path: PathBuf,
+    pub exclude: Vec<String>,
+}
+
+#[derive(Debug, Default)]
+pub struct Libraries {
+    pub classpath: Vec<PathBuf>,
+    pub natives: Vec<NativeJar>,
+    pub jobs: Vec<DownloadJob>,
+    /// Small loader dependencies checked even without a previous crash report.
+    pub bootstrap: Vec<DownloadJob>,
+}
+
+/// Work out which library files apply on this platform.
+pub fn resolve_libraries(dirs: &DataDirs, version: &VersionJson, env: &RuleEnv) -> Libraries {
+    let mut out = Libraries::default();
+    let mut seen = HashSet::new();
+    for lib in version
+        .libraries
+        .iter()
+        .filter(|l| rules_allow(l.rules.as_deref(), env))
+    {
+        if let Some(artifact) = main_artifact(lib)
+            && let Some(job) = library_job(dirs, lib, &artifact, None)
+            && seen.insert(job.dest.clone())
+        {
+            out.classpath.push(job.dest.clone());
+            // Locally generated files (no URL) are on the classpath only.
+            if !job.url.is_empty() {
+                if job.sha1.is_some()
+                    && [
+                        "net.fabricmc:",
+                        "net.legacyfabric:",
+                        "org.quiltmc:",
+                        "org.ow2.asm:",
+                        "org.spongepowered:",
+                    ]
+                    .iter()
+                    .any(|prefix| lib.name.starts_with(prefix))
+                {
+                    out.bootstrap.push(job.clone());
+                }
+                out.jobs.push(job);
+            }
+        }
+        if let Some(classifier) = native_classifier(lib, env)
+            && let Some(artifact) = native_artifact(lib, &classifier)
+            && let Some(job) = library_job(dirs, lib, &artifact, Some(&classifier))
+            && seen.insert(job.dest.clone())
+        {
+            out.natives.push(NativeJar {
+                path: job.dest.clone(),
+                exclude: lib.extract.clone().unwrap_or_default().exclude,
+            });
+            out.jobs.push(job);
+        }
+    }
+    out
+}
+
+/// Asked for after a crash that points at a damaged game file (see `crash::Diagnosis::repair`).
+const REPAIR_MARK: &str = "repair-libraries";
+
+/// Check every library by its checksum on the next start (not just its size).
+pub fn request_repair(dirs: &DataDirs) {
+    let mark = dirs.cache().join(REPAIR_MARK);
+    if let Some(parent) = mark.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Err(e) = std::fs::write(&mark, uuid::Uuid::new_v4().to_string()) {
+        log::warn!("couldn't ask for a library check: {e}");
+    }
+}
+
+/// One preparation's repair request, shared by the vanilla and loader installation passes.
+/// It is acknowledged only after both passes finish successfully. Dropping it on an error
+/// leaves the request on disk for the next attempt.
+pub(super) struct LibraryRepair {
+    mark: PathBuf,
+    request: Option<Vec<u8>>,
+}
+
+impl LibraryRepair {
+    pub(super) fn new(dirs: &DataDirs) -> Result<Self> {
+        let mark = dirs.cache().join(REPAIR_MARK);
+        let request = match fs::read(&mark) {
+            Ok(bytes) => Some(bytes),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(Error::io(&mark, e)),
+        };
+        Ok(Self { mark, request })
+    }
+
+    pub(super) fn check(&self, jobs: &[DownloadJob], bootstrap: &[DownloadJob]) -> Result<()> {
+        // Older launchers sometimes failed to request repair. Always check the small loader
+        // dependencies, especially Mixin, so the next Play can recover without another crash.
+        let selected = if self.request.is_some() {
+            jobs
+        } else {
+            bootstrap
+        };
+        let (mut checked, mut replaced) = (0, 0);
+        for job in selected {
+            if job.url.is_empty() {
+                continue; // Locally generated Forge files cannot be downloaded again here.
+            }
+            match fs::metadata(&job.dest) {
+                Ok(meta) if meta.is_file() => {}
+                Ok(_) => {
+                    return Err(Error::Other(format!(
+                        "A game file is blocked by a folder: {}",
+                        job.dest.display()
+                    )));
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) => return Err(Error::io(&job.dest, e)),
+            }
+            if let Some(want) = &job.sha1 {
+                checked += 1;
+                let have = crate::net::sha1_file(&job.dest)?;
+                if have.eq_ignore_ascii_case(want) {
+                    continue;
+                }
+            }
+            // A repair also refreshes downloadable libraries whose metadata has no checksum.
+            // A failed removal must stop preparation instead of reusing the broken file.
+            log::warn!("library fetched again: {}", job.dest.display());
+            fs::remove_file(&job.dest).at(&job.dest)?;
+            replaced += 1;
+        }
+        if !selected.is_empty() {
+            log::info!("library check: {checked} checksummed, {replaced} fetched again");
+        }
+        Ok(())
+    }
+
+    pub(super) fn finish(self) {
+        if let Some(request) = self.request
+            && fs::read(&self.mark).is_ok_and(|current| current == request)
+        {
+            // Don't clear a different crash's request received during this preparation.
+            if let Err(e) = fs::remove_file(&self.mark)
+                && e.kind() != std::io::ErrorKind::NotFound
+            {
+                log::warn!("couldn't finish the library check: {e}");
+            }
+        }
+    }
+}
+
+/// Mojang's library repository, the default for libraries without a URL.
+const MOJANG_LIBRARIES: &str = "https://libraries.minecraft.net/";
+
+/// The jar to put on the classpath: the explicit `downloads.artifact`, or
+/// one derived from a Maven `url` + `name` (Fabric/Quilt/legacy Forge).
+fn main_artifact(lib: &Library) -> Option<Artifact> {
+    if let Some(downloads) = &lib.downloads {
+        return downloads.artifact.clone();
+    }
+    if lib.natives.is_some() {
+        return None;
+    }
+    let base = lib.url.as_deref().unwrap_or(MOJANG_LIBRARIES);
+    let path = maven_path(&lib.name)?;
+    Some(Artifact {
+        url: format!("{}/{path}", base.trim_end_matches('/')),
+        path: Some(path),
+        sha1: lib.sha1.clone(),
+        size: lib.size,
+    })
+}
+
+/// The natives jar: the explicit `downloads.classifiers` entry, or one
+/// derived from a Maven `url` + `name` + classifier (Legacy Fabric's LWJGL 2).
+fn native_artifact(lib: &Library, classifier: &str) -> Option<Artifact> {
+    if let Some(downloads) = &lib.downloads {
+        return downloads.classifiers.as_ref()?.get(classifier).cloned();
+    }
+    let base = lib.url.as_deref().unwrap_or(MOJANG_LIBRARIES);
+    let path = maven_path(&format!("{}:{classifier}", lib.name))?;
+    Some(Artifact {
+        url: format!("{}/{path}", base.trim_end_matches('/')),
+        path: Some(path),
+        sha1: None,
+        size: None,
+    })
+}
+
+/// Legacy natives classifier for this OS, e.g. `natives-windows-64`.
+fn native_classifier(lib: &Library, env: &RuleEnv) -> Option<String> {
+    let bits = if env.arch == "x86" { "32" } else { "64" };
+    lib.natives
+        .as_ref()?
+        .get(env.os)
+        .map(|c| c.replace("${arch}", bits))
+}
+
+fn library_job(
+    dirs: &DataDirs,
+    lib: &Library,
+    artifact: &Artifact,
+    classifier: Option<&str>,
+) -> Option<DownloadJob> {
+    let rel = artifact.path.clone().or_else(|| {
+        let name = match classifier {
+            Some(c) => format!("{}:{c}", lib.name),
+            None => lib.name.clone(),
+        };
+        maven_path(&name)
+    })?;
+    Some(DownloadJob {
+        url: artifact.url.clone(),
+        dest: dirs.libraries().join(rel),
+        sha1: artifact.sha1.clone(),
+        size: artifact.size,
+        lzma: None,
+    })
+}
+
+/// Client jar path + download job.
+pub fn client_job(dirs: &DataDirs, version: &VersionJson) -> Result<DownloadJob> {
+    let client = version
+        .downloads
+        .as_ref()
+        .map(|d| &d.client)
+        .ok_or_else(|| Error::Other(format!("version {} has no client download", version.id)))?;
+    Ok(DownloadJob {
+        url: client.url.clone(),
+        dest: dirs
+            .version_dir(&version.id)
+            .join(format!("{}.jar", version.id)),
+        sha1: Some(client.sha1.clone()),
+        size: Some(client.size),
+        lzma: None,
+    })
+}
+
+/// Logging config job and the JVM argument template that points at it.
+pub fn logging_job(dirs: &DataDirs, version: &VersionJson) -> Option<(DownloadJob, String)> {
+    let client = version.logging.as_ref()?.client.as_ref()?;
+    let job = DownloadJob {
+        url: client.file.url.clone(),
+        dest: dirs.assets().join("log_configs").join(&client.file.id),
+        sha1: Some(client.file.sha1.clone()),
+        size: Some(client.file.size),
+        lzma: None,
+    };
+    Some((job, client.argument.clone()))
+}
+
+/// Assets still to fetch plus how the game should find them.
+pub struct AssetPlan {
+    /// Needed before the game starts.
+    pub jobs: Vec<DownloadJob>,
+    /// Fetched while the game runs: music, music discs and other languages' translations (over
+    /// half of a version's download). The game plays without them; a missing track is skipped.
+    pub later: Vec<DownloadJob>,
+    pub index_name: String,
+    /// Value for `${game_assets}` (legacy versions read loose files from here).
+    pub game_assets: PathBuf,
+    index: AssetIndex,
+    objects: PathBuf,
+}
+
+impl AssetPlan {
+    /// After `jobs` are downloaded: lay out the loose copies legacy
+    /// (pre-1.7) versions expect.
+    pub fn finish(&self) -> Result<()> {
+        if self.index.map_to_resources || self.index.is_virtual {
+            copy_legacy_assets(&self.index, &self.objects, &self.game_assets)?;
+        }
+        Ok(())
+    }
+}
+
+/// How long a check of all asset files stays good: the game's thousands of sound and
+/// texture files are not looked at again on every start within this time.
+const ASSETS_VERIFIED_FOR: std::time::Duration = std::time::Duration::from_secs(12 * 60 * 60);
+
+fn assets_stamp(dirs: &DataDirs, index_name: &str) -> PathBuf {
+    dirs.assets().join(format!(".verified-{index_name}"))
+}
+
+/// Whether every asset file of this index was found in place recently.
+pub fn assets_verified_recently(dirs: &DataDirs, index_name: &str) -> bool {
+    fs::metadata(assets_stamp(dirs, index_name))
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|age| age < ASSETS_VERIFIED_FOR)
+}
+
+/// Note that every asset file of this index was just found in place.
+pub fn mark_assets_verified(dirs: &DataDirs, index_name: &str) {
+    let _ = fs::write(assets_stamp(dirs, index_name), b"ok");
+}
+
+/// Fetch the asset index (small, verified) and list every object.
+pub fn plan_assets(dirs: &DataDirs, version: &VersionJson, game_dir: &Path) -> Result<AssetPlan> {
+    let index_ref = version
+        .asset_index
+        .as_ref()
+        .ok_or_else(|| Error::Other(format!("version {} has no asset index", version.id)))?;
+    let index_path = dirs
+        .assets()
+        .join("indexes")
+        .join(format!("{}.json", index_ref.id));
+    let index_job = DownloadJob {
+        url: index_ref.url.clone(),
+        dest: index_path.clone(),
+        sha1: Some(index_ref.sha1.clone()),
+        size: Some(index_ref.size),
+        lzma: None,
+    };
+    download_all("Asset index", vec![index_job], &|_| {})?;
+    let index: AssetIndex = load_json(&index_path)?
+        .ok_or_else(|| Error::Other("asset index missing after download".into()))?;
+
+    let objects = dirs.assets().join("objects");
+    // Old versions read copies laid out once everything is here: all of it first.
+    let legacy = index.map_to_resources || index.is_virtual;
+    let language = game_language(game_dir);
+    let (mut jobs, mut later) = (Vec::new(), Vec::new());
+    for (name, o) in &index.objects {
+        let prefix = &o.hash[..2.min(o.hash.len())];
+        let job = DownloadJob {
+            url: format!("{RESOURCES_URL}/{prefix}/{}", o.hash),
+            dest: objects.join(prefix).join(&o.hash),
+            sha1: Some(o.hash.clone()),
+            size: Some(o.size),
+            lzma: None,
+        };
+        if !legacy && can_wait(name, &language) {
+            later.push(job);
+        } else {
+            jobs.push(job);
+        }
+    }
+    let game_assets = if index.map_to_resources {
+        game_dir.join("resources")
+    } else if index.is_virtual {
+        dirs.assets().join("virtual").join(&index_ref.id)
+    } else {
+        dirs.assets()
+    };
+    Ok(AssetPlan {
+        jobs,
+        later,
+        index_name: index_ref.id.clone(),
+        game_assets,
+        index,
+        objects,
+    })
+}
+
+/// Whether the game can start without asset `name`: music other than the title screen's, music
+/// discs, and translations into languages other than `language` (the game's own setting).
+pub(crate) fn can_wait(name: &str, language: &str) -> bool {
+    if let Some(track) = name.strip_prefix("minecraft/sounds/music/") {
+        return !track.starts_with("menu/");
+    }
+    if name.starts_with("minecraft/sounds/records/") {
+        return true;
+    }
+    let translation = name
+        .strip_prefix("minecraft/lang/")
+        .or_else(|| name.strip_prefix("realms/lang/"));
+    translation.is_some_and(|file| {
+        file.strip_suffix(".json")
+            .or_else(|| file.strip_suffix(".lang"))
+            .is_some_and(|code| !code.eq_ignore_ascii_case(language))
+    })
+}
+
+/// The language the game is set to (its `options.txt`), English before the first start.
+fn game_language(game_dir: &Path) -> String {
+    fs::read_to_string(game_dir.join("options.txt"))
+        .ok()
+        .and_then(|text| {
+            text.lines()
+                .find_map(|l| l.strip_prefix("lang:").map(|v| v.trim().to_owned()))
+        })
+        .filter(|l| !l.is_empty())
+        .unwrap_or_else(|| "en_us".to_owned())
+}
+
+fn copy_legacy_assets(index: &AssetIndex, objects: &Path, target: &Path) -> Result<()> {
+    for (name, obj) in &index.objects {
+        let dest = target.join(name);
+        if fs::metadata(&dest).is_ok_and(|m| m.len() == obj.size) {
+            continue;
+        }
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent).at(parent)?;
+        }
+        let src = objects.join(&obj.hash[..2]).join(&obj.hash);
+        fs::copy(&src, &dest).at(&dest)?;
+    }
+    Ok(())
+}
+
+/// Unpack legacy natives jars (LWJGL 2 era) into `natives_dir`.
+/// Modern LWJGL 3 extracts its own natives at runtime.
+pub fn extract_natives(natives: &[NativeJar], natives_dir: &Path) -> Result<()> {
+    fs::create_dir_all(natives_dir).at(natives_dir)?;
+    for jar in natives {
+        let file = fs::File::open(&jar.path).at(&jar.path)?;
+        let mut archive = zip::ZipArchive::new(file)
+            .map_err(|e| Error::Other(format!("{}: {e}", jar.path.display())))?;
+        for i in 0..archive.len() {
+            let mut entry = archive
+                .by_index(i)
+                .map_err(|e| Error::Other(format!("{}: {e}", jar.path.display())))?;
+            let excluded = jar
+                .exclude
+                .iter()
+                .any(|ex| entry.name().starts_with(ex.as_str()));
+            // `enclosed_name` rejects absolute paths and `..` (zip-slip).
+            let Some(rel) = entry.enclosed_name() else {
+                continue;
+            };
+            if excluded || entry.is_dir() {
+                continue;
+            }
+            let dest = natives_dir.join(rel);
+            if fs::metadata(&dest).is_ok_and(|m| m.len() == entry.size()) {
+                continue;
+            }
+            if let Some(parent) = dest.parent() {
+                fs::create_dir_all(parent).at(parent)?;
+            }
+            let mut out = fs::File::create(&dest).at(&dest)?;
+            std::io::copy(&mut entry, &mut out).at(&dest)?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn music_discs_and_other_languages_can_wait() {
+        use super::can_wait;
+        assert!(can_wait("minecraft/sounds/music/game/calm1.ogg", "en_us"));
+        assert!(can_wait("minecraft/sounds/records/cat.ogg", "en_us"));
+        assert!(can_wait("minecraft/lang/tr_tr.json", "en_us"));
+        assert!(!can_wait("minecraft/lang/tr_tr.json", "tr_tr"));
+        assert!(!can_wait("minecraft/sounds/music/menu/menu1.ogg", "en_us"));
+        assert!(!can_wait("minecraft/sounds/mob/zombie/say1.ogg", "en_us"));
+        assert!(!can_wait(
+            "minecraft/textures/gui/title/background/panorama_0.png",
+            "en_us"
+        ));
+    }
+
+    use super::*;
+    use std::collections::HashSet as Set;
+    use std::io::Write;
+
+    fn env() -> RuleEnv {
+        RuleEnv {
+            os: "windows",
+            arch: "x86_64",
+            features: Set::new(),
+        }
+    }
+
+    #[test]
+    fn resolves_classpath_natives_and_rules() {
+        let version: VersionJson = serde_json::from_str(
+            r#"{"id":"1.8.9","mainClass":"M","libraries":[
+                {"name":"a:lib:1","downloads":{"artifact":{"path":"a/lib/1/lib-1.jar","sha1":"x","size":1,"url":"u"}}},
+                {"name":"a:lib:1","downloads":{"artifact":{"path":"a/lib/1/lib-1.jar","sha1":"x","size":1,"url":"u"}}},
+                {"name":"b:mac:1","rules":[{"action":"allow","os":{"name":"osx"}}],
+                 "downloads":{"artifact":{"path":"b/mac.jar","url":"u"}}},
+                {"name":"c:plat:2","natives":{"windows":"natives-windows-${arch}"},"extract":{"exclude":["META-INF/"]},
+                 "downloads":{"classifiers":{"natives-windows-64":{"path":"c/plat-64.jar","url":"u"}}}}
+            ]}"#,
+        )
+        .unwrap();
+        let dirs = DataDirs::new("root");
+        let libs = resolve_libraries(&dirs, &version, &env());
+        assert_eq!(libs.classpath, [dirs.libraries().join("a/lib/1/lib-1.jar")]);
+        assert_eq!(libs.natives.len(), 1);
+        assert_eq!(libs.natives[0].exclude, ["META-INF/"]);
+        assert_eq!(libs.jobs.len(), 2);
+    }
+
+    #[test]
+    fn maven_style_and_local_libraries() {
+        let version: VersionJson = serde_json::from_str(
+            r#"{"id":"fabric","mainClass":"M","libraries":[
+                {"name":"net.fabricmc:fabric-loader:0.16.9","url":"https://maven.fabricmc.net/"},
+                {"name":"org.ow2.asm:asm:9.7"},
+                {"name":"net.minecraftforge:forge:1.20.1-47.3.0:client",
+                 "downloads":{"artifact":{"path":"net/minecraftforge/forge/1.20.1-47.3.0/forge-1.20.1-47.3.0-client.jar","url":""}}}
+            ]}"#,
+        )
+        .unwrap();
+        let dirs = DataDirs::new("root");
+        let libs = resolve_libraries(&dirs, &version, &env());
+        assert_eq!(libs.classpath.len(), 3);
+        assert_eq!(libs.jobs.len(), 2, "local forge jar has no download");
+        assert_eq!(
+            libs.jobs[0].url,
+            "https://maven.fabricmc.net/net/fabricmc/fabric-loader/0.16.9/fabric-loader-0.16.9.jar"
+        );
+        assert!(
+            libs.jobs[1]
+                .url
+                .starts_with("https://libraries.minecraft.net/org/ow2/asm/asm/9.7/")
+        );
+    }
+
+    #[test]
+    fn maven_style_natives_resolve() {
+        let dirs = DataDirs::new("root");
+        let v: VersionJson = serde_json::from_str(
+            r#"{"id":"x","mainClass":"M","libraries":[
+                {"name":"org.lwjgl.lwjgl:lwjgl-platform:2.9.4+legacyfabric.17","url":"https://maven.legacyfabric.net/",
+                 "extract":{"exclude":["META-INF/"]},"natives":{"windows":"natives-windows"}}]}"#,
+        )
+        .unwrap();
+        let env = RuleEnv {
+            os: "windows",
+            arch: "x86_64",
+            ..RuleEnv::current()
+        };
+        let libs = resolve_libraries(&dirs, &v, &env);
+        assert_eq!(libs.natives.len(), 1);
+        assert!(libs.classpath.is_empty());
+        let job = libs
+            .jobs
+            .iter()
+            .find(|j| j.dest == libs.natives[0].path)
+            .unwrap();
+        assert_eq!(
+            job.url,
+            "https://maven.legacyfabric.net/org/lwjgl/lwjgl/lwjgl-platform/2.9.4+legacyfabric.17/lwjgl-platform-2.9.4+legacyfabric.17-natives-windows.jar"
+        );
+    }
+
+    #[test]
+    fn extracts_natives_with_excludes() {
+        let dir = tempfile::tempdir().unwrap();
+        let jar = dir.path().join("n.jar");
+        {
+            let mut zip = zip::ZipWriter::new(fs::File::create(&jar).unwrap());
+            let opts = zip::write::SimpleFileOptions::default();
+            zip.start_file("lwjgl64.dll", opts).unwrap();
+            zip.write_all(b"dll").unwrap();
+            zip.start_file("META-INF/MANIFEST.MF", opts).unwrap();
+            zip.write_all(b"m").unwrap();
+            zip.finish().unwrap();
+        }
+        let out = dir.path().join("natives");
+        let natives = [NativeJar {
+            path: jar,
+            exclude: vec!["META-INF/".into()],
+        }];
+        extract_natives(&natives, &out).unwrap();
+        assert_eq!(fs::read(out.join("lwjgl64.dll")).unwrap(), b"dll");
+        assert!(!out.join("META-INF").exists());
+    }
+
+    #[test]
+    fn a_repair_covers_vanilla_and_loader_before_it_is_finished() {
+        let dir = tempfile::tempdir().unwrap();
+        let dirs = DataDirs::new(dir.path());
+        let good = dir.path().join("good.jar");
+        let bad = dir.path().join("bad.jar");
+        std::fs::write(&good, b"right").unwrap();
+        std::fs::write(&bad, b"wrong").unwrap();
+        let job = |dest: &std::path::Path, content: &[u8]| crate::net::DownloadJob {
+            url: "u".into(),
+            dest: dest.to_path_buf(),
+            sha1: Some({
+                use sha1::Digest;
+                hex::encode(sha1::Sha1::digest(content))
+            }),
+            size: Some(5),
+            lzma: None,
+        };
+        let jobs = [job(&good, b"right"), job(&bad, b"right")];
+        // Not asked: nothing is hashed or removed.
+        LibraryRepair::new(&dirs)
+            .unwrap()
+            .check(&jobs, &[])
+            .unwrap();
+        assert!(bad.is_file());
+        request_repair(&dirs);
+        // Versions before request IDs used an empty marker.
+        fs::write(dirs.cache().join(REPAIR_MARK), b"").unwrap();
+        let repair = LibraryRepair::new(&dirs).unwrap();
+        repair.check(&jobs[..1], &[]).unwrap();
+        assert!(dirs.cache().join(REPAIR_MARK).is_file());
+        repair.check(&jobs, &[]).unwrap();
+        assert!(good.is_file());
+        assert!(!bad.is_file(), "same size, wrong contents: fetched again");
+        repair.finish();
+        // Done once: the next start is back to the quick check.
+        std::fs::write(&bad, b"wrong").unwrap();
+        LibraryRepair::new(&dirs)
+            .unwrap()
+            .check(&jobs, &[])
+            .unwrap();
+        assert!(bad.is_file());
+    }
+
+    #[test]
+    fn an_unfinished_repair_and_a_newer_crash_are_not_forgotten() {
+        let dir = tempfile::tempdir().unwrap();
+        let dirs = DataDirs::new(dir.path());
+        request_repair(&dirs);
+        drop(LibraryRepair::new(&dirs).unwrap());
+        assert!(dirs.cache().join(REPAIR_MARK).is_file());
+        let repair = LibraryRepair::new(&dirs).unwrap();
+        request_repair(&dirs);
+        repair.finish();
+        assert!(dirs.cache().join(REPAIR_MARK).is_file());
+        LibraryRepair::new(&dirs).unwrap().finish();
+        assert!(!dirs.cache().join(REPAIR_MARK).exists());
+    }
+
+    #[test]
+    fn a_repair_refreshes_unhashed_downloads_but_preserves_generated_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let dirs = DataDirs::new(dir.path());
+        let mut jobs = Vec::new();
+        for (name, url) in [
+            ("loader.jar", "https://example.invalid/loader.jar"),
+            ("generated.jar", ""),
+        ] {
+            let dest = dir.path().join(name);
+            fs::write(&dest, b"broken").unwrap();
+            jobs.push(DownloadJob {
+                url: url.into(),
+                dest,
+                sha1: None,
+                size: None,
+                lzma: None,
+            });
+        }
+        request_repair(&dirs);
+        LibraryRepair::new(&dirs)
+            .unwrap()
+            .check(&jobs, &[])
+            .unwrap();
+        assert!(!jobs[0].dest.exists());
+        assert_eq!(fs::read(&jobs[1].dest).unwrap(), b"broken");
+    }
+
+    #[test]
+    fn a_blocked_library_stops_repair_and_keeps_the_request() {
+        let dir = tempfile::tempdir().unwrap();
+        let dirs = DataDirs::new(dir.path());
+        let blocked = dir.path().join("blocked.jar");
+        fs::create_dir(&blocked).unwrap();
+        let job = DownloadJob {
+            url: "https://example.invalid/a.jar".into(),
+            dest: blocked,
+            sha1: None,
+            size: None,
+            lzma: None,
+        };
+        request_repair(&dirs);
+        let repair = LibraryRepair::new(&dirs).unwrap();
+        assert!(repair.check(&[job], &[]).is_err());
+        drop(repair);
+        assert!(dirs.cache().join(REPAIR_MARK).is_file());
+    }
+}

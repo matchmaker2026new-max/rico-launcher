@@ -1,0 +1,1423 @@
+//! Client for the Arctic cosmetics server (see the `arctic-cosmetics`
+//! crate). A player's look (skin, model, cape) is chosen locally and
+//! published; every Arctic client then shows it. Nothing is locked: the
+//! server only checks who is publishing, so nobody can change someone
+//! else's look. Microsoft accounts prove it through Mojang's session server
+//! (like a Minecraft server does); offline names are claimed with a key the
+//! launcher keeps.
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
+use serde::{Deserialize, Serialize};
+
+use crate::auth::{Account, AccountKind, now_secs};
+use crate::net::agent;
+use crate::skins::Variant;
+use crate::storage::{DataDirs, load_json, save_json};
+use crate::{Error, Result};
+
+pub const DEFAULT_URL: &str = "https://cosmetics.arcticlauncher.com";
+const JOIN_URL: &str = "https://sessionserver.mojang.com/session/minecraft/join";
+const MAX_BYTES: u64 = 2 * 1024 * 1024;
+const CREDENTIALS_FILE: &str = "cosmetics.json";
+/// Reuse a session token until it's this close to expiring.
+const TOKEN_MARGIN_SECS: u64 = 3600;
+
+/// Server to use: `ARCTIC_COSMETICS_URL` or the default.
+pub fn base_url() -> String {
+    std::env::var(crate::arctic_mod::COSMETICS_URL_ENV)
+        .ok()
+        .filter(|u| u.starts_with("http://") || u.starts_with("https://"))
+        .unwrap_or_else(|| DEFAULT_URL.to_owned())
+        .trim_end_matches('/')
+        .to_owned()
+}
+
+/// A cape offered to everyone.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct Preset {
+    pub id: String,
+    pub name: String,
+    /// Texture hash.
+    pub texture: String,
+    /// Animation frames (1: a still cape; older servers don't say).
+    #[serde(default = "one_frame")]
+    pub frames: u32,
+    /// Frames per second when animated (older servers don't say: 8).
+    #[serde(default = "default_fps")]
+    pub fps: u32,
+    /// The still image (texture hash) shown when the wearer turns
+    /// "Animate" off; only animated capes have one.
+    #[serde(default)]
+    pub still: Option<String>,
+}
+
+fn one_frame() -> u32 {
+    1
+}
+
+fn default_fps() -> u32 {
+    DEFAULT_CAPE_FPS
+}
+
+impl Preset {
+    /// A cape that moves (more than one frame).
+    pub fn animated(&self) -> bool {
+        self.frames > 1
+    }
+
+    /// Whether an animated cape can be switched to a still one.
+    pub fn has_still(&self) -> bool {
+        self.animated() && self.still.is_some()
+    }
+
+    /// How long each frame shows.
+    pub fn frame_secs(&self) -> f64 {
+        1.0 / f64::from(self.fps.clamp(1, MAX_CAPE_FPS))
+    }
+
+    /// Whether `hash` is this cape, animated or its still.
+    pub fn is_texture(&self, hash: &str) -> bool {
+        self.texture == hash || self.still.as_deref() == Some(hash)
+    }
+
+    /// What to publish to wear this cape: the animated cape, or (when the
+    /// wearer turned "Animate" off and the cape has a still) its still.
+    pub fn choice(&self, animate: bool) -> CapeChoice {
+        match (&self.still, animate) {
+            (Some(still), false) if self.animated() => {
+                CapeChoice::Custom(Texture::Hash(still.clone()))
+            }
+            _ => CapeChoice::Preset(self.id.clone()),
+        }
+    }
+}
+
+/// A published look; textures are hashes (`texture()` fetches them).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub struct Look {
+    pub skin: Option<String>,
+    #[serde(default)]
+    pub model: String,
+    pub cape: Option<String>,
+    /// Worn 3D cosmetics (catalog ids).
+    #[serde(default)]
+    pub cosmetics: Vec<String>,
+    /// How some of them sit, by id.
+    #[serde(default)]
+    pub fit: std::collections::BTreeMap<String, Fit>,
+}
+
+/// Half pixels a face cosmetic can move up or down (the server keeps it within this).
+pub const FIT_UP: i8 = 6;
+/// Half pixels a face cosmetic can move forward or back.
+pub const FIT_FORWARD: i8 = 4;
+
+/// How a cosmetic sits: moved in half pixels (up; forward, toward the face), or worn on the other
+/// side, mirrored (a shoulder pet).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, Deserialize)]
+pub struct Fit {
+    #[serde(default)]
+    pub up: i8,
+    #[serde(default)]
+    pub forward: i8,
+    #[serde(default)]
+    pub mirror: bool,
+}
+
+impl Fit {
+    pub fn is_default(&self) -> bool {
+        *self == Fit::default()
+    }
+}
+
+impl Look {
+    pub fn variant(&self) -> Variant {
+        if self.model == "slim" {
+            Variant::Slim
+        } else {
+            Variant::Classic
+        }
+    }
+}
+
+/// A texture to publish: a new image, or one the server already has.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Texture {
+    Png(Vec<u8>),
+    Hash(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CapeChoice {
+    Preset(String),
+    Custom(Texture),
+}
+
+/// What to publish. `None` parts are removed.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NewLook {
+    pub skin: Option<(Texture, Variant)>,
+    pub cape: Option<CapeChoice>,
+    /// Cosmetics to wear; `None` leaves the current ones on.
+    pub cosmetics: Option<Vec<String>>,
+    /// How they sit; `None` leaves the current fits.
+    pub fit: Option<std::collections::BTreeMap<String, Fit>>,
+}
+
+impl NewLook {
+    /// The look as currently published (references stored textures).
+    pub fn from_look(look: &Look, presets: &[Preset]) -> Self {
+        let skin = look
+            .skin
+            .clone()
+            .map(|h| (Texture::Hash(h), look.variant()));
+        let cape =
+            look.cape
+                .as_deref()
+                .map(|hash| match presets.iter().find(|p| p.texture == hash) {
+                    Some(p) => CapeChoice::Preset(p.id.clone()),
+                    // A still image stays the still it is (never silently animated again).
+                    None => CapeChoice::Custom(Texture::Hash(hash.to_owned())),
+                });
+        Self {
+            skin,
+            cape,
+            cosmetics: None,
+            fit: None,
+        }
+    }
+}
+
+fn texture_json(texture: &Texture) -> serde_json::Value {
+    match texture {
+        Texture::Png(png) => serde_json::json!({ "png": STANDARD.encode(png) }),
+        Texture::Hash(hash) => serde_json::json!({ "hash": hash }),
+    }
+}
+
+pub fn catalog(base: &str) -> Result<Vec<Preset>> {
+    get(&format!("{base}/v1/catalog"), None)
+}
+
+/// The name the server stores a PNG under (its SHA-1), so an uploaded or
+/// library image can be matched to a look without asking the server.
+pub fn texture_hash(png: &[u8]) -> String {
+    use sha1::Digest;
+    hex::encode(sha1::Sha1::digest(png))
+}
+
+/// A texture by hash (PNG).
+pub fn texture(base: &str, hash: &str) -> Result<Vec<u8>> {
+    if hash.len() != 40 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(Error::Other("bad texture hash".into()));
+    }
+    let mut resp = agent()
+        .get(&format!("{base}/v1/textures/{hash}.png"))
+        .call()?;
+    Ok(resp
+        .body_mut()
+        .with_config()
+        .limit(MAX_BYTES)
+        .read_to_vec()?)
+}
+
+pub fn my_look(base: &str, token: &str) -> Result<Look> {
+    get(&format!("{base}/v1/look"), Some(token))
+}
+
+/// Replace the published look.
+pub fn set_look(base: &str, token: &str, look: &NewLook) -> Result<Look> {
+    let skin = look.skin.as_ref().map(|(texture, variant)| {
+        let mut part = texture_json(texture);
+        part["model"] = variant.api_name().into();
+        part
+    });
+    let cape = look.cape.as_ref().map(|c| match c {
+        CapeChoice::Preset(id) => serde_json::json!({ "preset": id }),
+        CapeChoice::Custom(texture) => texture_json(texture),
+    });
+    let mut resp = agent()
+        .put(&format!("{base}/v1/look"))
+        .header("Authorization", &format!("Bearer {token}"))
+        .config()
+        .http_status_as_error(false)
+        .build()
+        .send_json({
+            let mut body = serde_json::json!({ "skin": skin, "cape": cape });
+            if let Some(ids) = &look.cosmetics {
+                body["cosmetics"] = serde_json::json!(ids);
+            }
+            if let Some(fit) = &look.fit {
+                body["fit"] = serde_json::json!(fit);
+            }
+            body
+        })?;
+    let status = resp.status().as_u16();
+    if !(200..300).contains(&status) {
+        return Err(Error::Other(server_error(&mut resp, status)));
+    }
+    Ok(resp.body_mut().with_config().limit(MAX_BYTES).read_json()?)
+}
+
+pub(crate) fn server_error(resp: &mut ureq::http::Response<ureq::Body>, status: u16) -> String {
+    #[derive(Deserialize)]
+    struct Body {
+        error: String,
+    }
+    let detail = resp
+        .body_mut()
+        .with_config()
+        .limit(64 * 1024)
+        .read_json::<Body>()
+        .map(|b| b.error)
+        .unwrap_or_default();
+    match (status, detail.is_empty()) {
+        (_, false) => format!("RICO: {detail}"),
+        (429, true) => "Too many changes at once. Wait a minute and try again.".into(),
+        _ => format!("The RICO server returned {status}."),
+    }
+}
+
+// ---- Gallery ------------------------------------------------------------
+
+/// A skin shared to the community gallery.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct GalleryItem {
+    pub id: String,
+    pub name: String,
+    /// Texture hash.
+    pub texture: String,
+    pub model: String,
+    #[serde(default)]
+    pub category: String,
+    pub author: String,
+    #[serde(default)]
+    pub downloads: i64,
+}
+
+impl GalleryItem {
+    pub fn variant(&self) -> Variant {
+        if self.model == "slim" {
+            Variant::Slim
+        } else {
+            Variant::Classic
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub struct GalleryPage {
+    pub items: Vec<GalleryItem>,
+    pub total: i64,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum GallerySort {
+    #[default]
+    Popular,
+    New,
+}
+
+/// Skins asked for per request (the server allows 48).
+pub const GALLERY_PAGE: usize = 48;
+
+/// Browse the gallery (`query` matches names and authors); `offset` pages on.
+pub fn gallery(base: &str, sort: GallerySort, query: &str, offset: usize) -> Result<GalleryPage> {
+    gallery_in_collection(base, sort, query, "", offset)
+}
+
+/// Browse one curated skin collection; an empty category includes everything.
+pub fn gallery_in_collection(
+    base: &str,
+    sort: GallerySort,
+    query: &str,
+    category: &str,
+    offset: usize,
+) -> Result<GalleryPage> {
+    let sort = match sort {
+        GallerySort::Popular => "popular",
+        GallerySort::New => "new",
+    };
+    // Percent-encode the UTF-8 bytes of everything but letters and digits.
+    let q: String = query
+        .trim()
+        .bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() {
+                (b as char).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
+        .collect();
+    get(
+        &format!(
+            "{base}/v1/gallery?sort={sort}&q={q}&category={category}&offset={offset}&limit={GALLERY_PAGE}"
+        ),
+        None,
+    )
+}
+
+/// Count a use of a gallery skin and get its texture hash.
+pub fn gallery_use(base: &str, id: &str) -> Result<String> {
+    #[derive(Deserialize)]
+    struct Used {
+        texture: String,
+    }
+    let used: Used = post(
+        &format!("{base}/v1/gallery/{}/use", url_segment(id)),
+        &serde_json::json!({}),
+    )?;
+    Ok(used.texture)
+}
+
+/// Share a skin to the gallery.
+pub fn gallery_share(
+    base: &str,
+    token: &str,
+    png: &[u8],
+    variant: Variant,
+    name: &str,
+) -> Result<()> {
+    let mut resp = agent()
+        .post(&format!("{base}/v1/gallery"))
+        .header("Authorization", &format!("Bearer {token}"))
+        .config()
+        .http_status_as_error(false)
+        .build()
+        .send_json(serde_json::json!({
+            "png": STANDARD.encode(png),
+            "model": variant.api_name(),
+            "name": name,
+        }))?;
+    let status = resp.status().as_u16();
+    if (200..300).contains(&status) {
+        Ok(())
+    } else {
+        Err(Error::Other(server_error(&mut resp, status)))
+    }
+}
+
+/// Send the optional "how did you hear about us?" answer from setup: just the answer (and, for
+/// "other", a few words), nothing that identifies the player.
+pub fn send_heard(base: &str, source: &str, other: &str) -> Result<()> {
+    let _: serde_json::Value = post(
+        &format!("{base}/v1/heard"),
+        &serde_json::json!({ "source": source, "other": other }),
+    )?;
+    Ok(())
+}
+
+/// A log the player chose to send to the staff.
+pub struct SharedLog<'a> {
+    pub launcher: &'a str,
+    pub game: &'a str,
+    pub os: &'a str,
+    /// Which log it is ("Minecraft 1.21.4", "Launcher").
+    pub source: &'a str,
+    pub log: &'a str,
+}
+
+/// Send a log to the staff; the answer is the short code the player gives in their ticket.
+pub fn send_log(base: &str, log: &SharedLog) -> Result<String> {
+    #[derive(Deserialize)]
+    struct Sent {
+        code: String,
+    }
+    let sent: Sent = post(
+        &format!("{base}/v1/logs"),
+        &serde_json::json!({
+            "launcher": log.launcher,
+            "game": log.game,
+            "os": log.os,
+            "source": log.source,
+            "log": log.log,
+        }),
+    )?;
+    Ok(sent.code)
+}
+
+/// Send a crash report the player agreed to share.
+pub fn send_crash_report(base: &str, report: &crate::crash::Report) -> Result<()> {
+    let mut resp = agent()
+        .post(&format!("{base}/v1/crash"))
+        .config()
+        .http_status_as_error(false)
+        .build()
+        .send_json(serde_json::json!({
+            "launcher": report.launcher,
+            "game": report.game,
+            "loader": report.loader,
+            "os": report.os,
+            "title": report.title,
+            "contact": report.contact,
+            "log": report.log,
+        }))?;
+    let status = resp.status().as_u16();
+    if (200..300).contains(&status) {
+        Ok(())
+    } else {
+        Err(Error::Other(server_error(&mut resp, status)))
+    }
+}
+
+/// An idea or bug report typed into the launcher.
+pub struct Suggestion {
+    /// `idea` or `bug`.
+    pub kind: String,
+    pub text: String,
+    /// How to reach the sender, if they said.
+    pub contact: String,
+    /// Logs the sender chose to attach (already cleaned), or empty.
+    pub log: String,
+}
+
+/// Send a suggestion the player wrote.
+pub fn send_suggestion(base: &str, suggestion: &Suggestion) -> Result<()> {
+    let mut resp = agent()
+        .post(&format!("{base}/v1/suggest"))
+        .config()
+        .http_status_as_error(false)
+        .build()
+        .send_json(serde_json::json!({
+            "kind": suggestion.kind,
+            "text": suggestion.text,
+            "contact": suggestion.contact,
+            "launcher": env!("CARGO_PKG_VERSION"),
+            "os": std::env::consts::OS,
+            "log": suggestion.log,
+        }))?;
+    let status = resp.status().as_u16();
+    if (200..300).contains(&status) {
+        Ok(())
+    } else {
+        Err(Error::Other(server_error(&mut resp, status)))
+    }
+}
+
+/// Report a gallery skin (hidden after several reports).
+pub fn gallery_report(base: &str, token: &str, id: &str) -> Result<()> {
+    let mut resp = agent()
+        .post(&format!("{base}/v1/gallery/{}/report", url_segment(id)))
+        .header("Authorization", &format!("Bearer {token}"))
+        .config()
+        .http_status_as_error(false)
+        .build()
+        .send_empty()?;
+    let status = resp.status().as_u16();
+    if (200..300).contains(&status) {
+        Ok(())
+    } else {
+        Err(Error::Other(server_error(&mut resp, status)))
+    }
+}
+
+/// Gallery ids are hex, or `arctic-<hex>` for the built-in skins; keeping
+/// only letters, digits and dashes means an id can't reach another path.
+fn url_segment(id: &str) -> String {
+    id.chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-')
+        .collect()
+}
+
+// ---- Sign-in ------------------------------------------------------------
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct Credential {
+    /// Offline accounts: the key that claims the name on the server. Kept as it is, not encrypted: it
+    /// only claims a name (names aren't identities), and an encrypted key stops reading when Windows'
+    /// machine or user identity changes, which locks the name for good. (Older encrypted keys still read.)
+    #[serde(default, with = "plain_key")]
+    key: Option<String>,
+    /// Offline accounts: the profile's recovery code, saved here so this PC can take its own name back
+    /// if the key is ever lost.
+    #[serde(default)]
+    recovery: Option<String>,
+    #[serde(default, with = "crate::secret::on_disk_opt")]
+    token: Option<String>,
+    #[serde(default)]
+    expires: u64,
+    /// The server that issued `token` (tokens only work there).
+    #[serde(default)]
+    server: String,
+}
+
+mod plain_key {
+    use serde::{Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S: Serializer>(value: &Option<String>, s: S) -> Result<S::Ok, S::Error> {
+        value.serialize(s)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+        crate::secret::on_disk_opt::deserialize(d)
+    }
+}
+
+/// Per-profile store of cosmetics keys and tokens (`cosmetics.json`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct Credentials {
+    accounts: HashMap<String, Credential>,
+}
+
+fn credentials_path(dirs: &DataDirs) -> PathBuf {
+    dirs.profile_root().join(CREDENTIALS_FILE)
+}
+
+/// Signing in, saving a recovery code and recovering all read `cosmetics.json`, change it and write it
+/// back: two at once (the friends page and a token refresh start together) lose each other's changes, and
+/// a lost key locks an offline name. One at a time.
+static CREDENTIALS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn held() -> std::sync::MutexGuard<'static, ()> {
+    CREDENTIALS_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// A session token for `account`, reusing a stored one while it's valid.
+pub fn token_for(dirs: &DataDirs, base: &str, account: &Account) -> Result<String> {
+    let _held = held();
+    let who = format!("{base}|{}", account.uuid);
+    if let Some(message) = cooling_down(&who) {
+        return Err(Error::Other(message));
+    }
+    match token_for_locked(dirs, base, account) {
+        Ok(token) => {
+            forget_failure(&who);
+            Ok(token)
+        }
+        Err(e) => {
+            remember_failure(&who, &e.to_string());
+            Err(e)
+        }
+    }
+}
+
+/// How long a failed sign-in is not tried again, doubling with each failure in a row. The friends page
+/// and the token refresh ask every few seconds; a name that is refused stays refused, and asking every
+/// four seconds only fills the log and loads the server.
+const RETRY_AFTER_SECS: [u64; 4] = [15, 30, 60, 60];
+
+type Failures = HashMap<String, (std::time::Instant, usize, String)>;
+
+fn failures() -> std::sync::MutexGuard<'static, Failures> {
+    static FAILURES: std::sync::OnceLock<std::sync::Mutex<Failures>> = std::sync::OnceLock::new();
+    FAILURES
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// The earlier failure's message while it's too soon to try again.
+fn cooling_down(who: &str) -> Option<String> {
+    let failures = failures();
+    let (at, count, message) = failures.get(who)?;
+    let wait = RETRY_AFTER_SECS[(count - 1).min(RETRY_AFTER_SECS.len() - 1)];
+    (at.elapsed().as_secs() < wait).then(|| message.clone())
+}
+
+fn remember_failure(who: &str, message: &str) {
+    let mut failures = failures();
+    let count = failures.get(who).map_or(0, |(_, n, _)| *n) + 1;
+    failures.insert(
+        who.to_owned(),
+        (std::time::Instant::now(), count, message.to_owned()),
+    );
+}
+
+fn forget_failure(who: &str) {
+    failures().remove(who);
+}
+
+fn token_for_locked(dirs: &DataDirs, base: &str, account: &Account) -> Result<String> {
+    let path = credentials_path(dirs);
+    let mut creds: Credentials = match load_json(&path) {
+        Ok(creds) => creds.unwrap_or_default(),
+        Err(e) => {
+            // Never overwritten: kept aside, and the offline key comes back from the ledgers.
+            log::warn!("{} is unreadable ({e}); keeping it aside", path.display());
+            crate::offline_keys::set_aside(&path);
+            Credentials::default()
+        }
+    };
+    // Files from before encryption: save them encrypted right away.
+    if std::fs::read_to_string(&path).is_ok_and(|t| crate::secret::has_plain(&t, &["token"])) {
+        save_json(&path, &creds)?;
+    }
+    let entry = creds.accounts.entry(account.uuid.clone()).or_default();
+    if let Some(token) = &entry.token
+        && entry.expires > now_secs() + TOKEN_MARGIN_SECS
+        && entry.server == base
+    {
+        return Ok(token.clone());
+    }
+    log::info!(
+        "RICO sign-in for {} ({}) at {base}",
+        account.username,
+        if account.is_microsoft() {
+            "Microsoft"
+        } else {
+            "offline"
+        }
+    );
+    let session = match &account.kind {
+        AccountKind::Microsoft(ms) => sign_in_microsoft(
+            base,
+            &ms.access_token.reveal(),
+            &account.uuid,
+            &account.username,
+        )
+        .inspect_err(|e| log::warn!("RICO sign-in for {} failed: {e}", account.username))?,
+        #[cfg(any(feature = "offline-accounts", test))]
+        AccountKind::Offline => {
+            let key = usable_key(dirs, &account.uuid, &account.username, entry)?;
+            // Save the key before using it, so a claimed name is never lost.
+            save_json(&path, &creds)?;
+            // The name may be held by another key this PC has (an older one, one in another profile or
+            // a backup): all are tried before the key counts as lost.
+            let mut keys = vec![key.clone()];
+            keys.extend(other_keys(dirs, &account.uuid, &key));
+            let mut outcome = sign_in_offline(base, &account.username, &key);
+            for other in keys.iter().skip(1) {
+                if !outcome.as_ref().is_err_and(wrong_key) {
+                    break;
+                }
+                log::info!("RICO: trying another saved key for {}", account.username);
+                if let Ok(session) = sign_in_offline(base, &account.username, other) {
+                    // This is the key that works: it becomes the newest everywhere.
+                    if let Err(e) =
+                        crate::offline_keys::remember(dirs, &account.uuid, &account.username, other)
+                    {
+                        log::warn!("couldn't save the working offline key: {e}");
+                    }
+                    let mut fresh: Credentials = load_json(&path)?.unwrap_or_default();
+                    fresh.accounts.entry(account.uuid.clone()).or_default().key =
+                        Some(other.clone());
+                    save_json(&path, &fresh)?;
+                    outcome = Ok(session);
+                }
+            }
+            match outcome {
+                Ok(session) => {
+                    creds = load_json(&path)?.unwrap_or_default();
+                    session
+                }
+                Err(e) => {
+                    log::warn!("RICO sign-in for {} failed: {e}", account.username);
+                    // The name is held by a key this PC no longer has, but this PC saved the profile's
+                    // recovery code: it takes its own name back, no one has to do anything.
+                    let saved = creds
+                        .accounts
+                        .get(&account.uuid)
+                        .and_then(|c| c.recovery.clone());
+                    let Some(code) = saved.filter(|_| e.to_string().contains("used by another"))
+                    else {
+                        return Err(e);
+                    };
+                    log::info!(
+                        "RICO: the key for {} is gone; using the recovery code saved on this PC",
+                        account.username
+                    );
+                    recover_offline_locked(dirs, base, account, &code).map_err(|_| e)?;
+                    let fresh: Credentials = load_json(&path)?.unwrap_or_default();
+                    return fresh
+                        .accounts
+                        .get(&account.uuid)
+                        .and_then(|c| c.token.clone())
+                        .ok_or_else(|| {
+                            Error::Other(
+                                "the saved recovery code worked but left no session".into(),
+                            )
+                        });
+                }
+            }
+        }
+    };
+    log::info!("RICO sign-in for {} worked", account.username);
+    let entry = creds.accounts.entry(account.uuid.clone()).or_default();
+    entry.token = Some(session.token.clone());
+    entry.expires = session.expires;
+    entry.server = base.to_owned();
+    let needs_recovery = !account.is_microsoft() && entry.recovery.is_none();
+    save_json(&path, &creds)?;
+    if needs_recovery {
+        save_recovery_code_locked(dirs, base, account, &session.token);
+    }
+    Ok(session.token)
+}
+
+/// The offline key of an account: the stored one, or a new one when there's none or it can't be
+/// used. A stored key that can't be decrypted (the file came from another PC or user, or the
+/// system's machine id changed) reads as empty, and the server refuses an empty key as
+/// "invalid name or key" for good; a new key at least gets a clear answer (the name is claimed:
+/// use the recovery code) instead.
+fn usable_key(dirs: &DataDirs, uuid: &str, name: &str, entry: &mut Credential) -> Result<String> {
+    let fine = |k: &str| (32..=128).contains(&k.len()) && k.bytes().all(|b| b.is_ascii_hexdigit());
+    if let Some(key) = entry.key.clone().filter(|k| fine(k)) {
+        // Make sure the extra copies have it too (older keys were only here).
+        if let Err(e) = crate::offline_keys::remember(dirs, uuid, name, &key) {
+            log::warn!("couldn't copy the offline key for {name} to the backup ledgers: {e}");
+        }
+        return Ok(key);
+    }
+    // Missing or unreadable here: the ledgers still have it, so the name is never lost.
+    if let Some(key) = crate::offline_keys::recall(dirs, uuid).filter(|k| fine(k)) {
+        log::warn!(
+            "the stored offline key for {name} was missing: restored from the backup ledger"
+        );
+        entry.key = Some(key.clone());
+        // The token went with this file; sign in again with the key.
+        entry.token = None;
+        return Ok(key);
+    }
+    log::warn!("no offline key for {name} anywhere: making a new one");
+    let key =
+        uuid::Uuid::new_v4().simple().to_string() + &uuid::Uuid::new_v4().simple().to_string();
+    // Saved in the ledgers before it claims anything; with no place to save it, no name is claimed.
+    crate::offline_keys::remember(dirs, uuid, name, &key)?;
+    entry.key = Some(key.clone());
+    // Whatever token went with the old key is no good either.
+    entry.token = None;
+    Ok(key)
+}
+
+/// The most keys tried for one sign-in.
+const MAX_KEY_TRIES: usize = 8;
+
+/// The key for `uuid` in a credentials file's text (readable, or the older encrypted kind).
+fn key_in_credentials(text: &str, uuid: &str) -> Option<String> {
+    serde_json::from_str::<Credentials>(text)
+        .ok()?
+        .accounts
+        .remove(uuid)?
+        .key
+}
+
+/// Every offline key this PC may have held for `uuid` besides `first`: the ledgers' history, then every
+/// `cosmetics.json` and ledger (backups and set-aside copies too) in the data folder and in every
+/// profile, including removed ones. A key counts as lost only when none of these works.
+fn other_keys(dirs: &DataDirs, uuid: &str, first: &str) -> Vec<String> {
+    let fine = |k: &str| (32..=128).contains(&k.len()) && k.bytes().all(|b| b.is_ascii_hexdigit());
+    let mut found = crate::offline_keys::history(dirs, uuid);
+    for file in crate::offline_keys::stored_files(dirs) {
+        let Ok(text) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        found.extend(key_in_credentials(&text, uuid));
+        found.extend(crate::offline_keys::keys_in_ledger(&text, uuid));
+    }
+    let mut keys: Vec<String> = Vec::new();
+    for key in found {
+        if key != first && fine(&key) && !keys.contains(&key) {
+            keys.push(key);
+        }
+    }
+    keys.truncate(MAX_KEY_TRIES - 1);
+    keys
+}
+
+/// The server says this name is held by another key (so another key may still be right).
+fn wrong_key(error: &Error) -> bool {
+    let text = error.to_string();
+    text.contains("used by another") || text.contains("invalid name or key")
+}
+
+/// Keep the profile's recovery code on this PC, made now when the profile has none (a code the player
+/// made themselves is never replaced behind their back). Quiet: it's retried at the next sign-in.
+fn save_recovery_code_locked(dirs: &DataDirs, base: &str, account: &Account, token: &str) {
+    let made = match crate::friends::profile(base, token) {
+        Ok(profile) if !profile.has_recovery => crate::friends::new_recovery(base, token).ok(),
+        _ => None,
+    };
+    if let Some(code) = made {
+        remember_recovery_code_locked(dirs, account, &code);
+    }
+}
+
+/// Save a recovery code on this PC for `account` (so the PC can heal a lost key by itself).
+pub fn remember_recovery_code(dirs: &DataDirs, account: &Account, code: &str) {
+    let _held = held();
+    remember_recovery_code_locked(dirs, account, code);
+}
+
+fn remember_recovery_code_locked(dirs: &DataDirs, account: &Account, code: &str) {
+    let path = credentials_path(dirs);
+    // A file that can't be read is left alone: writing a fresh one over it could destroy a key.
+    let mut creds: Credentials = match load_json(&path) {
+        Ok(creds) => creds.unwrap_or_default(),
+        Err(e) => {
+            log::warn!(
+                "couldn't save the recovery code: {} is unreadable ({e})",
+                path.display()
+            );
+            return;
+        }
+    };
+    creds
+        .accounts
+        .entry(account.uuid.clone())
+        .or_default()
+        .recovery = Some(code.to_owned());
+    if let Err(e) = save_json(&path, &creds) {
+        log::warn!("couldn't save the recovery code: {e}");
+    }
+}
+
+/// An offline account on a new PC: the profile's recovery code moves its
+/// name to a fresh key made here, and signs it in.
+pub fn recover_offline(dirs: &DataDirs, base: &str, account: &Account, code: &str) -> Result<()> {
+    let _held = held();
+    let done = recover_offline_locked(dirs, base, account, code);
+    if done.is_ok() {
+        forget_failure(&format!("{base}|{}", account.uuid));
+    }
+    done
+}
+
+fn recover_offline_locked(
+    dirs: &DataDirs,
+    base: &str,
+    account: &Account,
+    code: &str,
+) -> Result<()> {
+    if account.is_microsoft() {
+        return Err(Error::Other(
+            "Microsoft accounts don't need recovering".into(),
+        ));
+    }
+    let key =
+        uuid::Uuid::new_v4().simple().to_string() + &uuid::Uuid::new_v4().simple().to_string();
+    let mut resp = agent()
+        .post(&format!("{base}/v1/profile/recover"))
+        .config()
+        .http_status_as_error(false)
+        .build()
+        .send_json(
+            serde_json::json!({ "code": code.trim(), "name": account.username, "key": key }),
+        )?;
+    let status = resp.status().as_u16();
+    if !(200..300).contains(&status) {
+        return Err(Error::Other(server_error(&mut resp, status)));
+    }
+    let session: Session = resp.body_mut().with_config().limit(MAX_BYTES).read_json()?;
+    store_recovered(dirs, base, account, key, session)
+}
+
+/// A new key for the offline account `account`, which the server has just moved to it: keep the key and
+/// the session.
+fn store_recovered(
+    dirs: &DataDirs,
+    base: &str,
+    account: &Account,
+    key: String,
+    session: Session,
+) -> Result<()> {
+    // The name now belongs to this key: it goes in the ledgers before anything else can fail.
+    crate::offline_keys::remember(dirs, &account.uuid, &account.username, &key)?;
+    let path = credentials_path(dirs);
+    let mut creds: Credentials = load_json(&path)?.unwrap_or_default();
+    let entry = creds.accounts.entry(account.uuid.clone()).or_default();
+    entry.key = Some(key);
+    entry.token = Some(session.token);
+    entry.expires = session.expires;
+    entry.server = base.to_owned();
+    save_json(&path, &creds)
+}
+
+#[derive(Deserialize)]
+struct Session {
+    token: String,
+    expires: u64,
+}
+
+/// An offline account's move to this PC through a Discord login, in progress.
+#[derive(Debug, Clone)]
+pub struct DiscordRestore {
+    pub login: crate::friends::DiscordLogin,
+    key: String,
+}
+
+/// Start bringing an offline account to this PC with the Discord account linked to its profile.
+pub fn discord_restore_start(base: &str, account: &Account) -> Result<DiscordRestore> {
+    if account.is_microsoft() {
+        return Err(Error::Other(
+            "Microsoft accounts don't need recovering".into(),
+        ));
+    }
+    let key =
+        uuid::Uuid::new_v4().simple().to_string() + &uuid::Uuid::new_v4().simple().to_string();
+    let login = crate::friends::discord_restore_start(base, &account.username, &key)?;
+    Ok(DiscordRestore { login, key })
+}
+
+/// Whether the Discord login finished (the account is here now); false while the browser is still at it.
+pub fn discord_restore_poll(
+    dirs: &DataDirs,
+    base: &str,
+    account: &Account,
+    restore: &DiscordRestore,
+) -> Result<bool> {
+    let Some(answer) = crate::friends::discord_result(base, &restore.login)? else {
+        return Ok(false);
+    };
+    let session: Session = serde_json::from_value(answer)?;
+    let _held = held();
+    store_recovered(dirs, base, account, restore.key.clone(), session)?;
+    forget_failure(&format!("{base}|{}", account.uuid));
+    Ok(true)
+}
+
+fn sign_in_microsoft(base: &str, access_token: &str, uuid: &str, name: &str) -> Result<Session> {
+    #[derive(Deserialize)]
+    struct Challenge {
+        server_id: String,
+    }
+    let challenge: Challenge = post(&format!("{base}/v1/auth/challenge"), &serde_json::json!({}))?;
+    let joined = agent()
+        .post(JOIN_URL)
+        .config()
+        .http_status_as_error(false)
+        .build()
+        .send_json(serde_json::json!({
+            "accessToken": access_token,
+            "selectedProfile": uuid.replace('-', ""),
+            "serverId": challenge.server_id,
+        }))?;
+    if !joined.status().is_success() {
+        return Err(Error::Auth(format!(
+            "Mojang refused the session ({})",
+            joined.status().as_u16()
+        )));
+    }
+    post(
+        &format!("{base}/v1/auth/verify"),
+        &serde_json::json!({ "name": name, "server_id": challenge.server_id }),
+    )
+}
+
+#[cfg(any(feature = "offline-accounts", test))]
+fn sign_in_offline(base: &str, name: &str, key: &str) -> Result<Session> {
+    let mut resp = agent()
+        .post(&format!("{base}/v1/auth/offline"))
+        .config()
+        .http_status_as_error(false)
+        .build()
+        .send_json(serde_json::json!({ "name": name, "key": key }))?;
+    let status = resp.status().as_u16();
+    if !(200..300).contains(&status) {
+        return Err(Error::Other(server_error(&mut resp, status)));
+    }
+    Ok(resp.body_mut().with_config().limit(MAX_BYTES).read_json()?)
+}
+
+/// What the Arctic mod gets from the launcher for one game session.
+pub struct ModSession<'a> {
+    pub base: &'a str,
+    /// Cosmetics session, so looks picked in game publish as this player.
+    pub token: Option<&'a str>,
+    pub style: crate::settings::ClientStyle,
+    pub fancy: bool,
+    pub style_set: u64,
+    pub proxy: &'a crate::proxy::ProxySettings,
+    /// In-game account switching, while the launcher runs.
+    pub bridge: Option<&'a crate::bridge::BridgeInfo>,
+    /// The game may tell the Arctic server (for friends) which server it's on.
+    pub share_server: bool,
+    /// A duel to start from the title screen (see `QuickPlay::Duel`).
+    pub duel: Option<serde_json::Value>,
+    /// A replay to watch from the title screen (see `QuickPlay::Replay`).
+    pub replay: Option<serde_json::Value>,
+}
+
+/// Write the session file for the Arctic mod in `game_dir`.
+pub fn write_mod_session(game_dir: &Path, session: &ModSession) -> Result<()> {
+    let ModSession {
+        base,
+        token,
+        style,
+        fancy,
+        style_set,
+        proxy,
+        bridge,
+        share_server,
+        duel,
+        replay,
+    } = session;
+    let path = game_dir.join("config").join("arctic-session.json");
+    let contents = serde_json::json!({
+        "url": base,
+        "token": token,
+        "style": style.id(),
+        "fancy": fancy,
+        "style_set": style_set,
+        // Server connections through the proxy (the Arctic Client does
+        // that part; Minecraft only proxies its own web services).
+        "proxy": {
+            "enabled": proxy.active().is_some(),
+            "type": match proxy.kind {
+                crate::proxy::ProxyKind::Socks5 => "socks5",
+                crate::proxy::ProxyKind::Http => "http",
+            },
+            "host": proxy.bare_host(),
+            "port": proxy.port,
+            "username": proxy.username,
+            "password": proxy.password,
+            "set": proxy.set,
+        },
+        "bridge": bridge,
+        "share_server": share_server,
+        "duel": duel,
+        "replay": replay,
+    });
+    write_private(&path, &serde_json::to_vec_pretty(&contents)?)
+}
+
+/// Write `bytes` to `path` for this user only (the session file holds the Arctic token, the proxy password
+/// and the bridge secret): through a temporary file, with no `.bak` of the previous contents, and without
+/// group or other access on Unix. The Arctic Client deletes the file once it has read it.
+fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
+    use std::io::Write;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
+    }
+    let mut tmp_name = path.as_os_str().to_os_string();
+    tmp_name.push(".tmp");
+    let tmp = PathBuf::from(tmp_name);
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&tmp).map_err(|e| Error::io(&tmp, e))?;
+    file.write_all(bytes).map_err(|e| Error::io(&tmp, e))?;
+    file.sync_all().map_err(|e| Error::io(&tmp, e))?;
+    drop(file);
+    std::fs::rename(&tmp, path).map_err(|e| Error::io(path, e))?;
+    // Earlier launcher versions kept the previous contents (and so the previous token) next to it.
+    let mut old = path.as_os_str().to_os_string();
+    old.push(".bak");
+    let _ = std::fs::remove_file(old);
+    Ok(())
+}
+
+fn get<T: serde::de::DeserializeOwned>(url: &str, token: Option<&str>) -> Result<T> {
+    let mut req = agent().get(url);
+    if let Some(t) = token {
+        req = req.header("Authorization", &format!("Bearer {t}"));
+    }
+    let mut resp = req.call()?;
+    Ok(resp.body_mut().with_config().limit(MAX_BYTES).read_json()?)
+}
+
+fn post<T: serde::de::DeserializeOwned>(url: &str, body: &serde_json::Value) -> Result<T> {
+    let mut resp = agent().post(url).send_json(body)?;
+    Ok(resp.body_mut().with_config().limit(MAX_BYTES).read_json()?)
+}
+
+/// Animated capes stack up to this many 2:1 frames vertically...
+pub const MAX_CAPE_FRAMES: u32 = 32;
+/// ...in a strip at most this tall (as the server allows).
+pub const MAX_CAPE_STRIP_HEIGHT: u32 = 12288;
+/// Playback speed of capes that don't say (8 frames a second).
+pub const DEFAULT_CAPE_FPS: u32 = 8;
+/// Fastest playback a cape may ask for.
+pub const MAX_CAPE_FPS: u32 = 30;
+/// How long each frame of a cape shows at the default speed.
+pub const CAPE_FRAME_SECS: f64 = 1.0 / DEFAULT_CAPE_FPS as f64;
+
+static REDUCE_CAPE_MOTION: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// The viewer's "reduce motion" choice: animated capes stand still on the
+/// first frame (everywhere in the launcher, for every cape shown).
+pub fn set_reduce_cape_motion(on: bool) {
+    REDUCE_CAPE_MOTION.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn reduce_cape_motion() -> bool {
+    REDUCE_CAPE_MOTION.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Width and height from a PNG's header, without decoding the pixels.
+pub fn png_size(png: &[u8]) -> Option<(u32, u32)> {
+    let reader = png::Decoder::new(std::io::Cursor::new(png))
+        .read_info()
+        .ok()?;
+    Some((reader.info().width, reader.info().height))
+}
+
+/// Widest cape accepted (HD capes, as the server allows).
+pub const MAX_CAPE_WIDTH: u32 = 1024;
+
+/// Whether a PNG is a cape the server would accept, judged from its header
+/// before anything is decoded.
+pub fn is_cape_png(png: &[u8]) -> bool {
+    png_size(png).is_some_and(|(w, h)| {
+        (64..=MAX_CAPE_WIDTH).contains(&w) && w.is_power_of_two() && cape_frames(w, h).is_some()
+    })
+}
+
+/// Frames in a cape image of `width`×`height`: 1 for a plain cape, more
+/// for animated ones, `None` if it isn't a cape layout.
+pub fn cape_frames(width: u32, height: u32) -> Option<u32> {
+    let frame = width / 2;
+    if frame == 0 || !height.is_multiple_of(frame) {
+        return None;
+    }
+    Some(height / frame)
+        .filter(|n| (1..=MAX_CAPE_FRAMES).contains(n))
+        .filter(|_| height <= MAX_CAPE_STRIP_HEIGHT)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_refused_sign_in_is_not_asked_again_at_once() {
+        let who = "https://example.invalid|test-account";
+        assert_eq!(cooling_down(who), None);
+        remember_failure(who, "this name is used by another RICO player");
+        assert_eq!(
+            cooling_down(who).as_deref(),
+            Some("this name is used by another RICO player")
+        );
+        forget_failure(who);
+        assert_eq!(cooling_down(who), None);
+    }
+
+    #[test]
+    fn the_offline_key_and_recovery_code_are_stored_readably() {
+        let key = "cd".repeat(32);
+        let entry = Credential {
+            key: Some(key.clone()),
+            recovery: Some("abcd-efgh-ijkl-mnop".into()),
+            ..Credential::default()
+        };
+        let json = serde_json::to_string(&entry).unwrap();
+        // Not encrypted: it must keep reading if Windows' machine or user identity changes.
+        assert!(json.contains(&key));
+        let back: Credential = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.key.as_deref(), Some(key.as_str()));
+        assert_eq!(back.recovery.as_deref(), Some("abcd-efgh-ijkl-mnop"));
+    }
+
+    fn key_dirs() -> (tempfile::TempDir, DataDirs) {
+        let dir = tempfile::tempdir().unwrap();
+        let dirs = DataDirs::new(dir.path().join("data"));
+        (dir, dirs)
+    }
+
+    #[test]
+    fn a_new_key_is_made_only_when_none_exists_and_is_never_sent_empty() {
+        for stored in [None, Some(String::new()), Some("not hex".to_owned())] {
+            let (_dir, dirs) = key_dirs();
+            let mut entry = Credential {
+                key: stored,
+                token: Some("old".into()),
+                ..Credential::default()
+            };
+            let key = usable_key(&dirs, "u1", "Alex", &mut entry).unwrap();
+            assert_eq!(key.len(), 64);
+            assert!(key.bytes().all(|b| b.is_ascii_hexdigit()));
+            assert_eq!(entry.token, None, "the old key's token goes too");
+            // The new key is in the ledgers before it claims anything.
+            assert_eq!(
+                crate::offline_keys::recall(&dirs, "u1").as_deref(),
+                Some(key.as_str())
+            );
+        }
+        let (_dir, dirs) = key_dirs();
+        let good = "ab".repeat(32);
+        let mut entry = Credential {
+            key: Some(good.clone()),
+            token: Some("t".into()),
+            ..Credential::default()
+        };
+        assert_eq!(usable_key(&dirs, "u1", "Alex", &mut entry).unwrap(), good);
+        assert_eq!(
+            entry.token.as_deref(),
+            Some("t"),
+            "a good key is left alone"
+        );
+    }
+
+    #[test]
+    fn a_key_lost_from_the_credentials_file_comes_back_from_the_ledger() {
+        let (_dir, dirs) = key_dirs();
+        let good = "ab".repeat(32);
+        let mut entry = Credential {
+            key: Some(good.clone()),
+            ..Credential::default()
+        };
+        usable_key(&dirs, "u1", "Alex", &mut entry).unwrap();
+        // cosmetics.json lost the key (a clobbered write, a reset, an unreadable file...).
+        for lost in [None, Some(String::new()), Some("garbage".to_owned())] {
+            let mut entry = Credential {
+                key: lost,
+                token: Some("t".into()),
+                ..Credential::default()
+            };
+            assert_eq!(usable_key(&dirs, "u1", "Alex", &mut entry).unwrap(), good);
+            assert_eq!(entry.key.as_deref(), Some(good.as_str()));
+        }
+    }
+
+    #[test]
+    fn keys_are_looked_for_in_every_profile_backup_and_ledger() {
+        let (_dir, dirs) = key_dirs();
+        let (a, b, c) = ("aa".repeat(32), "bb".repeat(32), "cc".repeat(32));
+        let creds = |key: &str| format!(r#"{{"accounts":{{"u1":{{"key":"{key}"}}}}}}"#);
+        // This profile's file has none; another profile and a set-aside copy have one each.
+        let here = dirs.with_profile("main");
+        std::fs::create_dir_all(here.profile_root()).unwrap();
+        std::fs::write(
+            here.profile_root().join("cosmetics.json"),
+            r#"{"accounts":{}}"#,
+        )
+        .unwrap();
+        let other = dirs.with_profile("old");
+        std::fs::create_dir_all(other.profile_root()).unwrap();
+        std::fs::write(other.profile_root().join("cosmetics.json"), creds(&b)).unwrap();
+        std::fs::write(
+            other.profile_root().join("cosmetics.json.unreadable-5"),
+            creds(&c),
+        )
+        .unwrap();
+        crate::offline_keys::remember(&here, "u1", "Alex", &a).unwrap();
+        let found = other_keys(&here, "u1", &a);
+        assert!(found.contains(&b), "another profile's file");
+        assert!(found.contains(&c), "a set-aside copy");
+        assert!(!found.contains(&a), "the first key isn't repeated");
+        assert!(other_keys(&here, "someone-else", &a).is_empty());
+    }
+
+    use super::*;
+
+    #[test]
+    fn gallery_ids_stay_whole_but_cannot_escape_the_path() {
+        assert_eq!(
+            url_segment("arctic-eb46302ea78bd2a1"),
+            "arctic-eb46302ea78bd2a1"
+        );
+        assert_eq!(url_segment("003f9230304949ff"), "003f9230304949ff");
+        assert_eq!(url_segment("../admin?x=1"), "adminx1");
+    }
+
+    fn png(w: u32, h: u32) -> Vec<u8> {
+        let mut out = Vec::new();
+        let mut enc = png::Encoder::new(&mut out, w, h);
+        enc.set_color(png::ColorType::Rgba);
+        let mut writer = enc.write_header().unwrap();
+        writer
+            .write_image_data(&vec![255u8; (w * h * 4) as usize])
+            .unwrap();
+        drop(writer);
+        out
+    }
+
+    #[test]
+    fn texture_hash_is_the_sha1_the_server_names_it_by() {
+        // SHA-1 of the empty input.
+        assert_eq!(
+            texture_hash(b""),
+            "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+        );
+        assert_eq!(texture_hash(&png(64, 64)).len(), 40);
+    }
+
+    #[test]
+    fn cape_pngs_are_judged_by_their_header() {
+        assert!(is_cape_png(&png(64, 32)));
+        assert!(is_cape_png(&png(128, 64 * 4)));
+        assert!(is_cape_png(&png(1024, 512)));
+        assert!(!is_cape_png(&png(2048, 1024)));
+        assert!(!is_cape_png(&png(96, 48)));
+        assert!(!is_cape_png(b"not a png"));
+        // A small file claiming a huge size is refused before decoding.
+        let mut huge = png(64, 32);
+        huge[16..20].copy_from_slice(&65_536u32.to_be_bytes());
+        huge[20..24].copy_from_slice(&32_768u32.to_be_bytes());
+        assert!(!is_cape_png(&huge));
+    }
+
+    #[test]
+    fn counts_cape_frames() {
+        assert_eq!(cape_frames(64, 32), Some(1));
+        assert_eq!(cape_frames(128, 64 * 6), Some(6));
+        assert_eq!(cape_frames(64, 32 * 9), Some(9));
+        assert_eq!(cape_frames(64, 32 * 33), None);
+        // The strip may be at most 12288 tall: 24 frames of 1024×512, not 25.
+        assert_eq!(cape_frames(1024, 512 * 24), Some(24));
+        assert_eq!(cape_frames(1024, 512 * 25), None);
+        assert_eq!(cape_frames(512, 256 * 32), Some(32));
+        assert_eq!(cape_frames(64, 48), None);
+        assert_eq!(cape_frames(0, 0), None);
+    }
+
+    fn preset(frames: u32, still: Option<&str>) -> Preset {
+        Preset {
+            id: "wolf".into(),
+            name: "Wolf".into(),
+            texture: "aa".into(),
+            frames,
+            fps: 12,
+            still: still.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn animate_off_wears_the_still_and_keeps_it_across_republishes() {
+        let wolf = preset(16, Some("bb"));
+        assert_eq!(wolf.choice(true), CapeChoice::Preset("wolf".into()));
+        assert_eq!(
+            wolf.choice(false),
+            CapeChoice::Custom(Texture::Hash("bb".into()))
+        );
+        assert!((wolf.frame_secs() - 1.0 / 12.0).abs() < 1e-9);
+        assert!(wolf.is_texture("aa") && wolf.is_texture("bb") && !wolf.is_texture("cc"));
+        // A cape that doesn't move has no still to switch to.
+        assert_eq!(
+            preset(1, None).choice(false),
+            CapeChoice::Preset("wolf".into())
+        );
+        // Re-publishing a look that wears the still keeps the still.
+        let look = Look {
+            cape: Some("bb".into()),
+            ..Look::default()
+        };
+        let again = NewLook::from_look(&look, &[wolf]);
+        assert_eq!(
+            again.cape,
+            Some(CapeChoice::Custom(Texture::Hash("bb".into())))
+        );
+    }
+
+    #[test]
+    fn older_servers_have_no_fps_or_still() {
+        let p: Preset =
+            serde_json::from_str(r#"{"id":"a","name":"A","texture":"t","frames":6}"#).unwrap();
+        assert_eq!((p.fps, p.still.clone()), (8, None));
+        assert!(p.animated() && !p.has_still());
+    }
+
+    #[test]
+    fn parses_looks() {
+        let look: Look =
+            serde_json::from_str(r#"{"skin":"ab","model":"slim","cape":null}"#).unwrap();
+        assert_eq!(look.variant(), Variant::Slim);
+        assert_eq!(look.cape, None);
+        let empty: Look = serde_json::from_str(r#"{"skin":null,"cape":null}"#).unwrap();
+        assert_eq!(empty.variant(), Variant::Classic);
+    }
+
+    #[test]
+    fn rejects_odd_hashes() {
+        assert!(texture("http://127.0.0.1:1", "../x").is_err());
+    }
+}

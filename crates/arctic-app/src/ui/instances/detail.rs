@@ -1,0 +1,730 @@
+//! One instance's page: header, sub-tabs, and the Settings page.
+
+use arctic_core::instances::{self, Instance};
+use arctic_core::settings::MIN_MEMORY_MB;
+use eframe::egui::{self, CornerRadius, RichText, Stroke};
+
+use super::InstancePage;
+use crate::app::{ArcticApp, Tab};
+use crate::art::icons::Icon;
+use crate::theme::{self, Palette};
+use crate::toasts::Kind;
+use crate::widgets;
+
+const MAX_MEMORY_MB: u32 = 32 * 1024;
+
+pub(crate) fn dialog_frame(p: &Palette) -> egui::Frame {
+    egui::Frame::new()
+        .fill(crate::theme::dialog_fill(p))
+        .stroke(Stroke::new(1.0, p.card_stroke))
+        .corner_radius(CornerRadius::same(16))
+        .inner_margin(22.0)
+}
+
+impl ArcticApp {
+    pub(super) fn instance_page(&mut self, ui: &mut egui::Ui, id: &str) {
+        let p = self.palette();
+        let Some(instance) = self.instance_by_id(id).cloned() else {
+            return;
+        };
+        if instance.loader.kind().is_some() {
+            self.check_mods(id, false);
+            ui.ctx()
+                .request_repaint_after(crate::mod_tasks::POLL_INTERVAL);
+        }
+        if widgets::button(
+            ui,
+            p,
+            Some(Icon::ChevronLeft),
+            crate::i18n::current("All instances"),
+            false,
+        )
+        .clicked()
+        {
+            self.inst.open = None;
+            return;
+        }
+        ui.add_space(8.0);
+        theme::card(p).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            crate::widgets::row(ui, |ui| {
+                let emblem = widgets::instance_emblem(ui, p, &instance.icon, 64.0);
+                self.icon_picker(&emblem, id);
+                ui.add_space(6.0);
+                ui.vertical(|ui| {
+                    ui.add_space(8.0);
+                    ui.label(
+                        RichText::new(&instance.name)
+                            .size(22.0)
+                            .strong()
+                            .color(p.text),
+                    );
+                    ui.label(RichText::new(Self::instance_subtitle(&instance)).color(p.muted));
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let idle = !self.runs.instance_active(id);
+                    let play = ui
+                        .add_enabled_ui(idle, |ui| {
+                            widgets::button(
+                                ui,
+                                p,
+                                Some(Icon::Play),
+                                crate::i18n::current("Play"),
+                                true,
+                            )
+                        })
+                        .inner;
+                    if play.clicked() {
+                        self.settings.last_instance =
+                            (!instance.is_default()).then(|| id.to_owned());
+                        let now = ui.input(|i| i.time);
+                        self.set_tab(Tab::Play, now);
+                        self.launch_selected();
+                    }
+                    if widgets::icon_button(
+                        ui,
+                        p,
+                        Icon::Share,
+                        crate::i18n::current("Share: mods, HUD, crosshair"),
+                    )
+                    .clicked()
+                    {
+                        self.open_share(Some(id.to_owned()));
+                    }
+                    if widgets::icon_button(
+                        ui,
+                        p,
+                        Icon::Folder,
+                        crate::i18n::current("Open instance folder"),
+                    )
+                    .clicked()
+                    {
+                        let dir = instance.game_dir(&self.dirs);
+                        let _ = std::fs::create_dir_all(&dir);
+                        let _ = open::that_detached(&dir);
+                    }
+                });
+            });
+        });
+        ui.add_space(12.0);
+        let modded = instance.loader.kind().is_some();
+        ui.horizontal(|ui| {
+            if modded {
+                ui.selectable_value(
+                    &mut self.inst.page,
+                    InstancePage::Mods,
+                    crate::i18n::current("Mods"),
+                );
+                ui.selectable_value(
+                    &mut self.inst.page,
+                    InstancePage::Browse,
+                    crate::i18n::current("Browse mods"),
+                );
+            }
+            ui.selectable_value(
+                &mut self.inst.page,
+                InstancePage::Packs,
+                crate::i18n::current("Packs & shaders"),
+            );
+            ui.selectable_value(
+                &mut self.inst.page,
+                InstancePage::Worlds,
+                crate::i18n::current("Worlds"),
+            );
+            if instance.arctic_mod {
+                ui.selectable_value(
+                    &mut self.inst.page,
+                    InstancePage::Replays,
+                    crate::i18n::current("Replays"),
+                );
+            }
+            ui.selectable_value(
+                &mut self.inst.page,
+                InstancePage::Settings,
+                crate::i18n::current("Settings"),
+            );
+        });
+        ui.add_space(10.0);
+        // A mod dropped on any other tab is added too, and the Mods tab opens to show it.
+        if modded
+            && self.inst.page != InstancePage::Mods
+            && self.add_dropped_mods(
+                ui,
+                &instance.id,
+                &instance.game_dir(&self.dirs).join("mods"),
+            )
+        {
+            self.inst.page = InstancePage::Mods;
+        }
+        match (self.inst.page, modded) {
+            (InstancePage::Mods, true) => self.mods_page(ui, &instance),
+            (InstancePage::Browse, true) => self.browse_page(ui, &instance),
+            (InstancePage::Worlds, _) => self.worlds_page(ui, &instance),
+            (InstancePage::Replays, _) => self.replays_page(ui, &instance),
+            (InstancePage::Packs, _) => self.packs_page(ui, &instance),
+            _ => self.instance_settings(ui, &instance),
+        }
+        self.project_preview(ui.ctx(), &instance);
+    }
+
+    fn instance_settings(&mut self, ui: &mut egui::Ui, instance: &Instance) {
+        let p = self.palette();
+        let id = instance.id.clone();
+        theme::card(p).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(
+                RichText::new(crate::i18n::current("General"))
+                    .size(17.0)
+                    .strong()
+                    .color(p.text),
+            );
+            ui.add_space(6.0);
+            if instance.is_default() {
+                ui.label(
+                    RichText::new(
+                        "The default instance plays whichever release you pick on the Play tab.",
+                    )
+                    .color(p.muted),
+                );
+            } else {
+                let mut name = self
+                    .inst
+                    .rename
+                    .clone()
+                    .unwrap_or_else(|| instance.name.clone());
+                widgets::field_row(ui, |ui| {
+                    ui.label(crate::i18n::current("Name"));
+                    ui.add(
+                        widgets::text_field(&mut name)
+                            .char_limit(48)
+                            .desired_width(280.0),
+                    );
+                    if name.trim() != instance.name
+                        && !name.trim().is_empty()
+                        && crate::widgets::button(ui, p, None, crate::i18n::current("Save"), false)
+                            .clicked()
+                    {
+                        self.update_instance(&id, |i| i.name = name.trim().to_owned());
+                        self.inst.rename = None;
+                        return;
+                    }
+                    self.inst.rename = Some(name);
+                });
+                ui.label(RichText::new(Self::instance_subtitle(instance)).color(p.muted));
+            }
+        });
+        self.version_card(ui, instance);
+        self.loader_card(ui, instance);
+        ui.add_space(12.0);
+        theme::card(p).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(
+                RichText::new(crate::i18n::current("Memory"))
+                    .size(17.0)
+                    .strong()
+                    .color(p.text),
+            );
+            let mut custom = instance.max_memory_mb.is_some();
+            let mut mb = instance
+                .max_memory_mb
+                .unwrap_or(self.settings.max_memory_mb);
+            let mut changed = ui
+                .checkbox(
+                    &mut custom,
+                    crate::i18n::current("Use a custom amount for this instance"),
+                )
+                .changed();
+            if custom {
+                changed |= ui
+                    .add(
+                        egui::Slider::new(&mut mb, MIN_MEMORY_MB..=MAX_MEMORY_MB)
+                            .step_by(512.0)
+                            .custom_formatter(|v, _| format!("{:.1} GB", v / 1024.0)),
+                    )
+                    .changed();
+            } else {
+                ui.label(
+                    RichText::new(format!(
+                        "Using the launcher setting ({:.1} GB).",
+                        self.settings.max_memory_mb as f32 / 1024.0
+                    ))
+                    .color(p.muted),
+                );
+            }
+            if changed {
+                self.update_instance(&id, |i| i.max_memory_mb = custom.then_some(mb));
+            }
+        });
+        self.java_card(ui, instance);
+        self.game_folder_card(ui, instance);
+        self.arctic_mod_card(ui, instance);
+        self.performance_card(ui, instance);
+        self.extras_card(ui, instance);
+        self.settings_card(ui, instance);
+        if instance.is_default() {
+            return;
+        }
+        self.duplicate_card(ui, instance);
+        ui.add_space(12.0);
+        theme::card(p).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(RichText::new(crate::i18n::current("Remove instance")).size(17.0).strong().color(p.text));
+            ui.label(RichText::new(crate::i18n::current("The folder (worlds and mods included) is moved to instances/.trash, not deleted.")).color(p.muted));
+            ui.add_space(6.0);
+            if !self.inst.confirm_delete {
+                if widgets::button(ui, p, Some(Icon::Trash), crate::i18n::current("Remove"), false).clicked() {
+                    self.inst.confirm_delete = true;
+                }
+                return;
+            }
+            crate::widgets::row(ui, |ui| {
+                if crate::widgets::button(ui, p, None, crate::i18n::current("Keep it"), false).clicked() {
+                    self.inst.confirm_delete = false;
+                }
+                if widgets::button(ui, p, Some(Icon::Trash), crate::i18n::current("Yes, remove"), true).clicked() {
+                    self.delete_instance(&id);
+                }
+            });
+        });
+    }
+
+    /// crate::i18n::current("Duplicate instance"): a copy to try other mods in without touching this one.
+    fn duplicate_card(&mut self, ui: &mut egui::Ui, instance: &Instance) {
+        let p = self.palette();
+        let running = self.runs.active_for(&instance.id, None).is_some();
+        ui.add_space(12.0);
+        theme::card(p).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(RichText::new(crate::i18n::current("Duplicate instance")).size(17.0).strong().color(p.text));
+            ui.label(
+                RichText::new(
+                    "A copy with its own folder: the same mods, packs, settings and configs. Handy for trying other mods without touching this one.",
+                )
+                .color(p.muted),
+            );
+            ui.add_space(6.0);
+            ui.checkbox(&mut self.inst.dup_worlds, crate::i18n::current("Copy the worlds too (can be big)"));
+            ui.add_space(4.0);
+            if self.inst.duplicating {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(RichText::new(crate::i18n::current("Copying…")).color(p.muted));
+                });
+            } else if running {
+                ui.label(RichText::new(crate::i18n::current("Close the game first.")).color(p.warn));
+            } else if widgets::button(ui, p, Some(Icon::Layers), crate::i18n::current("Duplicate"), false).clicked() {
+                self.inst.duplicating = true;
+                self.tasks
+                    .duplicate_instance(instance.clone(), self.inst.dup_worlds);
+            }
+        });
+    }
+
+    /// The copy is ready (or could not be made).
+    pub(crate) fn on_instance_duplicated(&mut self, result: Result<Instance, String>) {
+        self.inst.duplicating = false;
+        match result {
+            Ok(copy) => {
+                self.reload_instances();
+                self.toasts.push(
+                    Kind::Success,
+                    crate::tr_format!("Made {}", copy.name),
+                    "Press Play when you're ready.",
+                );
+                self.open_instance(&copy.id);
+            }
+            Err(e) => self.toasts.push(
+                Kind::Error,
+                crate::i18n::current("Couldn't duplicate the instance"),
+                e,
+            ),
+        }
+    }
+
+    /// Per-instance Java executable and JVM flags.
+    fn java_card(&mut self, ui: &mut egui::Ui, instance: &Instance) {
+        let p = self.palette();
+        let id = instance.id.clone();
+        ui.add_space(12.0);
+        theme::card(p).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(
+                RichText::new(crate::i18n::current("Java"))
+                    .size(17.0)
+                    .strong()
+                    .color(p.text),
+            );
+            let mut custom = instance.java_path.is_some();
+            if ui
+                .checkbox(
+                    &mut custom,
+                    crate::i18n::current("Use a specific Java for this instance"),
+                )
+                .changed()
+            {
+                let path = custom.then(|| self.settings.java_override.clone().unwrap_or_default());
+                self.update_instance(&id, |i| i.java_path = path);
+            }
+            if let Some(path) = &instance.java_path {
+                let mut text = path.display().to_string();
+                let response = widgets::field_row(ui, |ui| {
+                    ui.label(crate::i18n::current("Path"));
+                    ui.add(
+                        widgets::text_field(&mut text)
+                            .hint_text(crate::i18n::current(
+                                "C:\\Program Files\\Java\\bin\\javaw.exe",
+                            ))
+                            .desired_width(420.0),
+                    )
+                })
+                .inner;
+                if response.changed() {
+                    self.update_instance(&id, |i| i.java_path = Some(text.trim().into()));
+                }
+                if !path.as_os_str().is_empty() && !path.is_file() {
+                    ui.label(
+                        RichText::new(crate::i18n::current(
+                            "That file doesn't exist; the managed Java will be used.",
+                        ))
+                        .color(p.warn),
+                    );
+                }
+            } else {
+                ui.label(
+                    RichText::new(crate::i18n::current(
+                        "RICO downloads the right Java for each Minecraft version.",
+                    ))
+                    .color(p.muted),
+                );
+            }
+            ui.add_space(6.0);
+            let mut args = instance.jvm_args.clone();
+            let changed = widgets::field_row(ui, |ui| {
+                ui.label(crate::i18n::current("Extra JVM arguments"));
+                ui.add(
+                    widgets::text_field(&mut args)
+                        .hint_text(crate::i18n::current("e.g. -XX:+UseZGC"))
+                        .desired_width(420.0),
+                )
+                .changed()
+            })
+            .inner;
+            if changed {
+                self.update_instance(&id, |i| i.jvm_args = args);
+            }
+        });
+    }
+
+    /// Toggle for Arctic's companion mod (Fabric and Quilt only).
+    fn arctic_mod_card(&mut self, ui: &mut egui::Ui, instance: &Instance) {
+        use arctic_core::arctic_mod;
+        use arctic_core::loaders::LoaderKind;
+        let p = self.palette();
+        if !self.settings.play_with_client {
+            ui.add_space(12.0);
+            theme::card(p).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.label(
+                    RichText::new(crate::i18n::current("The RICO Client is off for every instance"))
+                        .strong()
+                        .color(p.warn),
+                );
+                ui.label(
+                    RichText::new(
+                        "Settings → RICO Client → Play with RICO Client. Turn it on there for this instance's switch below to take effect.",
+                    )
+                    .color(p.muted),
+                );
+            });
+        }
+        let fabric_like = matches!(
+            instance.loader.kind(),
+            Some(LoaderKind::Fabric | LoaderKind::Quilt)
+        );
+        let vanilla = instance.loader.kind().is_none();
+        // Forge has the Arctic mod too where there's a Forge build (1.8.9).
+        let forge_like = matches!(instance.loader.kind(), Some(LoaderKind::Forge))
+            && instance
+                .version
+                .as_deref()
+                .or(self.settings.last_version.as_deref())
+                .is_some_and(arctic_mod::supports_forge);
+        if !fabric_like && !forge_like && !vanilla {
+            // NeoForge, and Forge versions without a build: say why there's no switch, instead of leaving it a mystery.
+            ui.add_space(12.0);
+            theme::card(p).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.label(
+                    RichText::new("RICO Client")
+                        .size(17.0)
+                        .strong()
+                        .color(p.text),
+                );
+                ui.label(
+                    RichText::new(
+                        "The RICO Client runs on Vanilla, Fabric and Quilt instances, and on Forge 1.8.9. Not on this loader or version yet: make a Vanilla or Fabric instance of the same version to play with it.",
+                    )
+                    .color(p.muted),
+                );
+            });
+            return;
+        }
+        // The default instance follows the Play tab's version.
+        let version = instance
+            .version
+            .clone()
+            .or_else(|| self.settings.last_version.clone());
+        let supported = version.as_deref().is_some_and(|v| {
+            if forge_like {
+                arctic_mod::supports_forge(v)
+            } else {
+                arctic_mod::supports(v)
+            }
+        });
+        let (title, about, toggle) = if vanilla {
+            (
+                "RICO Client",
+                "RICO's menus, HUD and looks in game. Minecraft runs through Fabric underneath; turn this and Performance off for pure vanilla.",
+                "Play with the RICO Client",
+            )
+        } else {
+            (
+                "RICO mod",
+                "Shows everyone's RICO looks (skins and capes) and adds an RICO menu in game.",
+                "Install the RICO mod",
+            )
+        };
+        ui.add_space(12.0);
+        theme::card(p).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(RichText::new(title).size(17.0).strong().color(p.text));
+            ui.label(RichText::new(about).color(p.muted));
+            let mut on = instance.arctic_mod;
+            if ui.checkbox(&mut on, toggle).changed() {
+                let id = instance.id.clone();
+                if on {
+                    self.update_instance(&id, |i| i.arctic_mod = true);
+                } else {
+                    self.client_off_confirm = Some(id);
+                }
+            }
+            if !supported {
+                ui.label(
+                    RichText::new(crate::i18n::current(
+                        "Not available for this Minecraft version yet.",
+                    ))
+                    .color(p.muted),
+                );
+            }
+        });
+    }
+
+    /// Vanilla, Fabric and Quilt instances: the Performance switch (Sodium, Lithium, …).
+    /// Whether this instance follows the settings shared by the profile's instances.
+    fn settings_card(&mut self, ui: &mut egui::Ui, instance: &Instance) {
+        let p = self.palette();
+        ui.add_space(12.0);
+        theme::card(p).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(RichText::new(crate::i18n::current("Settings")).size(17.0).strong().color(p.text));
+            ui.label(
+                RichText::new(
+                    "Your server list, HUD and RICO Client settings, and Minecraft's keys, FOV and video settings are the same in every instance that shares them, so a new one feels like the one you already set up.",
+                )
+                .color(p.muted),
+            );
+            let mut shared = !instance.own_settings;
+            if ui
+                .checkbox(&mut shared, crate::i18n::current("Share settings with my other instances"))
+                .changed()
+            {
+                let id = instance.id.clone();
+                self.update_instance(&id, |i| i.own_settings = !shared);
+            }
+            ui.label(
+                RichText::new(if shared {
+                    "Changes you make here show up in the others, and theirs show up here."
+                } else {
+                    "This instance keeps its own settings; nothing is copied in or out."
+                })
+                .small()
+                .color(p.muted),
+            );
+        });
+    }
+
+    fn performance_card(&mut self, ui: &mut egui::Ui, instance: &Instance) {
+        use arctic_core::loaders::LoaderKind;
+        let modded = instance.loader.kind().is_some();
+        // Forge 1.8.9 has its own (smaller) set; other Forge and NeoForge instances none.
+        let forge = instance.loader.kind() == Some(LoaderKind::Forge)
+            && instance
+                .version
+                .as_deref()
+                .is_some_and(arctic_core::mods::performance::forge_supported);
+        if !forge
+            && matches!(
+                instance.loader.kind(),
+                Some(LoaderKind::Forge | LoaderKind::NeoForge)
+            )
+        {
+            return;
+        }
+        let p = self.palette();
+        ui.add_space(12.0);
+        theme::card(p).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(RichText::new(crate::i18n::current("Performance")).size(17.0).strong().color(p.text));
+            ui.label(
+                RichText::new(if forge {
+                    "Adds Patcher (performance and bug fixes) and Entity Culling (stops drawing what you can't see) for higher FPS. Downloaded from Modrinth; ones you already have are left as they are."
+                } else {
+                    "Adds Sodium, Lithium, FerriteCore, ImmediatelyFast, EntityCulling, Particle Core, BadOptimizations, ModernFix and Polarium for much higher FPS and faster starts. Downloaded from Modrinth for your version (Polarium comes with RICO); ones not updated yet are skipped."
+                })
+                .color(p.muted),
+            );
+            if modded {
+                ui.label(
+                    RichText::new(crate::i18n::current("Ones you've added yourself (or mods that do the same job) are left as they are."))
+                        .small()
+                        .color(p.muted),
+                );
+            }
+            let mut on = instance.performance;
+            if ui.checkbox(&mut on, crate::i18n::current("Boost FPS with performance mods")).changed() {
+                let id = instance.id.clone();
+                if on {
+                    self.update_instance(&id, |i| i.performance = true);
+                } else {
+                    self.performance_off_confirm = Some(id);
+                }
+            }
+            let game_dir = instance.game_dir(&self.dirs);
+            let mut installed = arctic_core::mods::performance::installed(&game_dir);
+            if arctic_core::mods::polarium::installed(&game_dir.join("mods")) {
+                installed.push(arctic_core::mods::polarium::NAME.to_owned());
+            }
+            if on && !installed.is_empty() {
+                ui.label(
+                    RichText::new(format!("Installed: {}", installed.join(", ")))
+                        .small()
+                        .color(p.muted),
+                );
+            }
+        });
+    }
+
+    /// Optional mods that are not about speed, each on its own switch (so nobody has to search for them).
+    fn extras_card(&mut self, ui: &mut egui::Ui, instance: &Instance) {
+        use arctic_core::loaders::LoaderKind;
+        if matches!(
+            instance.loader.kind(),
+            Some(LoaderKind::Forge | LoaderKind::NeoForge)
+        ) {
+            return;
+        }
+        let p = self.palette();
+        ui.add_space(12.0);
+        theme::card(p).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(
+                RichText::new(crate::i18n::current("Extras"))
+                    .size(17.0)
+                    .strong()
+                    .color(p.text),
+            );
+            ui.label(
+                RichText::new(crate::i18n::current(
+                    "Optional mods that aren't about speed. Each has its own switch.",
+                ))
+                .color(p.muted),
+            );
+            for (project, name, about) in arctic_core::mods::performance::OPTIONAL {
+                let mut wanted = instance.extras.iter().any(|e| e == project);
+                if ui
+                    .checkbox(&mut wanted, format!("{name}: {about}"))
+                    .changed()
+                {
+                    let id = instance.id.clone();
+                    let project = (*project).to_owned();
+                    self.update_instance(&id, move |i| {
+                        i.extras.retain(|e| *e != project);
+                        if wanted {
+                            i.extras.push(project);
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    /// A crash's "Fix it": switch off the mods it names, or update the instance's loader.
+    pub(crate) fn apply_crash_fix(&mut self, instance_id: &str, fix: &arctic_core::crash::Fix) {
+        let found = if self.instance.id == instance_id {
+            Some(self.instance.clone())
+        } else {
+            self.custom_instances
+                .iter()
+                .find(|i| i.id == instance_id)
+                .cloned()
+        };
+        let Some(mut instance) = found else {
+            self.toasts.push(
+                Kind::Error,
+                crate::i18n::current("Couldn't fix it"),
+                crate::i18n::current("That instance is gone."),
+            );
+            return;
+        };
+        match arctic_core::crash_fix::apply(&self.dirs, &mut instance, fix) {
+            Ok(done) => {
+                let loader = instance.loader.clone();
+                // A loader update is already saved; keep the open copy in step.
+                self.update_instance(instance_id, move |i| i.loader = loader);
+                self.toasts
+                    .push(Kind::Success, crate::i18n::current("Fixed"), done);
+            }
+            Err(e) => self.toasts.push(
+                Kind::Error,
+                crate::i18n::current("Couldn't fix it"),
+                e.to_string(),
+            ),
+        }
+    }
+
+    /// Apply `change` to an instance and save it.
+    pub(crate) fn update_instance(&mut self, id: &str, change: impl FnOnce(&mut Instance)) {
+        let dirs = self.dirs.clone();
+        let Some(instance) = self.instance_mut(id) else {
+            return;
+        };
+        change(instance);
+        if let Err(e) = instance.save(&dirs) {
+            self.toasts
+                .push(Kind::Error, "Could not save instance", e.to_string());
+        }
+    }
+
+    fn delete_instance(&mut self, id: &str) {
+        match instances::remove(&self.dirs, id) {
+            Ok(()) => {
+                if self.settings.last_instance.as_deref() == Some(id) {
+                    self.settings.last_instance = None;
+                }
+                self.inst.open = None;
+                self.inst.confirm_delete = false;
+                self.reload_instances();
+                self.toasts.push(
+                    Kind::Info,
+                    "Instance removed",
+                    crate::i18n::current("Moved to instances/.trash"),
+                );
+            }
+            Err(e) => self.toasts.push(
+                Kind::Error,
+                crate::i18n::current("Could not remove instance"),
+                e.to_string(),
+            ),
+        }
+    }
+}

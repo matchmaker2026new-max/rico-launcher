@@ -1,0 +1,12 @@
+{
+  "pack": {
+		"description": "RICO Client effects (motion blur)",
+    "pack_format": 63,
+    "supported_formats": {
+      "min_inclusive": 63,
+      "max_inclusive": 1000
+    },
+    "min_format": 63,
+    "max_format": 1000
+  }
+}

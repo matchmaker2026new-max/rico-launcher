@@ -1,0 +1,701 @@
+//! Settings tab. Every change is saved automatically.
+
+use std::path::PathBuf;
+
+use arctic_core::settings::{
+    CrashReports, GameStartAction, Language, MIN_MEMORY_MB, Settings, ThemeMode,
+};
+use arctic_core::update::UpdateChannel;
+use eframe::egui::{self, CornerRadius, RichText, Sense, Stroke, StrokeKind, vec2};
+
+use crate::app::ArcticApp;
+use crate::art::icons::{self, Icon};
+use crate::art::lerp_color;
+use crate::theme::{self, Palette};
+use crate::widgets;
+
+const MAX_MEMORY_SLIDER_MB: u32 = 32 * 1024;
+const MEMORY_STEP_MB: f64 = 512.0;
+const MAX_RESOLUTION: u32 = 7680;
+const RESOLUTIONS: [(u32, u32); 4] = [(854, 480), (1280, 720), (1600, 900), (1920, 1080)];
+const THEMES: [(ThemeMode, &str); 4] = [
+    (ThemeMode::Default, "Aurora"),
+    (ThemeMode::Glass, "Glass"),
+    (ThemeMode::Dark, "Dark"),
+    (ThemeMode::Light, "Light"),
+];
+
+/// The groups of the Settings page: one is shown at a time (picked with the chips at the top).
+const GROUPS: [&str; 4] = ["General", "Game", "Network & voice", "Data"];
+
+thread_local! {
+    /// The group being shown (the UI runs on one thread).
+    static GROUP: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static LANGUAGE: std::cell::Cell<Language> = const { std::cell::Cell::new(Language::English) };
+}
+
+/// Which group a section belongs to.
+fn group_of(title: &str) -> usize {
+    match title {
+        "Appearance" | "RICO Client" | "Launching" | "Updates" => 0,
+        "Memory" | "Versions" | "Game window" | "Java" => 1,
+        "Network" | "Voice chat" => 2,
+        _ => 3,
+    }
+}
+
+impl ArcticApp {
+    pub(crate) fn settings_tab(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette();
+        LANGUAGE.with(|language| language.set(self.settings.language));
+        widgets::page_header(ui, p, "Settings", "Changes are saved automatically.");
+        let mut group = GROUP.with(|g| g.get());
+        ui.horizontal(|ui| {
+            for (i, name) in GROUPS.iter().enumerate() {
+                if ui
+                    .selectable_label(group == i, crate::i18n::text(self.settings.language, *name))
+                    .clicked()
+                {
+                    group = i;
+                }
+            }
+        });
+        GROUP.with(|g| g.set(group));
+        ui.add_space(8.0);
+        let mut performance = self.instance.performance;
+        let mut choose_picture = false;
+        let mut restart_update = false;
+        let update_installed = matches!(self.update, crate::app::UpdateState::Installed { .. });
+        let software_gl = self.software_gl;
+        let s = &mut self.settings;
+
+        section(ui, p, crate::i18n::current("Appearance"), |ui| {
+            widgets::field_row(ui, |ui| {
+                ui.label(crate::i18n::current("Language"));
+                for language in Language::ALL {
+                    ui.selectable_value(&mut s.language, language, language.label());
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 12.0;
+                for (mode, name) in THEMES {
+                    if theme_tile(
+                        ui,
+                        theme::palette(mode),
+                        crate::i18n::current(name),
+                        s.theme == mode,
+                    ) {
+                        s.theme = mode;
+                    }
+                }
+            });
+            ui.add_space(6.0);
+            crate::zoom::size_row(ui, &mut s.interface_size);
+            widgets::field_row(ui, |ui| {
+                use arctic_core::settings::Backdrop;
+                ui.label(crate::i18n::current("Background"));
+                ui.selectable_value(
+                    &mut s.backdrop,
+                    Backdrop::Scenery,
+                    crate::i18n::current("RICO scenery"),
+                );
+                ui.selectable_value(
+                    &mut s.backdrop,
+                    Backdrop::Picture,
+                    crate::i18n::current("Your screenshot"),
+                )
+                .on_hover_text(crate::i18n::current(crate::i18n::current(
+                    "Your newest screenshot, or the version's title screen",
+                )));
+                if ui
+                    .selectable_label(
+                        s.backdrop == Backdrop::Custom,
+                        crate::i18n::current("Your picture…"),
+                    )
+                    .on_hover_text(match &s.custom_backdrop {
+                        Some(path) => format!("Choose another picture. Now: {}", path.display()),
+                        None => crate::i18n::current("Choose a picture of your own").to_owned(),
+                    })
+                    .clicked()
+                {
+                    match &s.custom_backdrop {
+                        Some(_) if s.backdrop != Backdrop::Custom => s.backdrop = Backdrop::Custom,
+                        _ => choose_picture = true,
+                    }
+                }
+            });
+            ui.checkbox(
+                &mut s.animations,
+                crate::i18n::current("Animated background"),
+            )
+            .on_hover_text(crate::i18n::current(crate::i18n::current(
+                "Aurora, snowfall and shooting stars. Pauses while you play.",
+            )));
+            if software_gl {
+                ui.label(
+                    RichText::new(
+                        crate::i18n::current("Off for now: your graphics driver draws in software (no GPU), where this slows the whole PC down. The glass blur is off too."),
+                    )
+                    .small()
+                    .color(p.warn),
+                );
+            }
+            ui.checkbox(&mut s.reduce_cape_motion, crate::i18n::current("Freeze animated capes and cosmetics"))
+                .on_hover_text(crate::i18n::current("Animated capes and sculpted cosmetics stand still here. Only your own view changes; what you and others wear stays as chosen."));
+            ui.checkbox(
+                &mut s.start_maximized,
+                crate::i18n::current("Start the launcher maximized"),
+            );
+            if cfg!(windows) {
+                ui.checkbox(
+                    &mut s.tray,
+                    crate::i18n::current("Keep RICO in the system tray when closed"),
+                )
+                .on_hover_text(crate::i18n::current(crate::i18n::current(
+                    "Reopens instantly. Quit from the tray icon.",
+                )));
+            }
+            ui.checkbox(
+                &mut s.exit_games_with_launcher,
+                crate::i18n::current("Close Minecraft when RICO quits"),
+            )
+            .on_hover_text(crate::i18n::current(crate::i18n::current(
+                "Off: games keep running after the launcher closes.",
+            )));
+            ui.checkbox(
+                &mut s.confirm_join_launch,
+                crate::i18n::current("Ask before launching Minecraft to join a server"),
+            )
+            .on_hover_text(crate::i18n::current(crate::i18n::current(
+                "Join on a server asks first when no game is running.",
+            )));
+            ui.checkbox(&mut s.quick_tips, crate::i18n::current("Show quick tips"))
+                .on_hover_text(crate::i18n::current(crate::i18n::current(
+                    "A tip about one of RICO's features in the sidebar, a new one every 5 minutes.",
+                )));
+        });
+
+        section(ui, p, crate::i18n::current("RICO Client"), |ui| {
+            ui.label(
+                RichText::new(
+                    crate::i18n::current("How Minecraft's menus look in game. Press Right Shift in game for HUD widgets and capes."),
+                )
+                .small()
+                .color(p.muted),
+            );
+            ui.add_space(4.0);
+            ui.checkbox(&mut s.play_with_client, crate::i18n::current("Play with RICO Client"))
+                .on_hover_text(
+                    crate::i18n::current("On: games start with the RICO Client (HUD, zoom, cosmetics, replays and more). Off: no game does, whatever its own switch says; the mod is taken out of the instance's mods folder."),
+                );
+            ui.add_space(4.0);
+            ui.add_enabled_ui(s.play_with_client, |ui| {
+                super::client_style::picker(ui, p, s, super::client_style::SETTINGS_TILE_WIDTH);
+                ui.add_space(6.0);
+                super::client_style::fancy_toggle(ui, s);
+            });
+            ui.checkbox(&mut performance, crate::i18n::current("Boost FPS with performance mods"))
+                .on_hover_text(
+                    crate::i18n::current("Vanilla: adds Sodium, Lithium, FerriteCore, ImmediatelyFast, EntityCulling, Particle Core, BadOptimizations, ModernFix and Polarium. Other instances have their own switch."),
+                );
+        });
+
+        section(ui, p, crate::i18n::current("Launching"), |ui| {
+            ui.checkbox(&mut s.gentle_launch, crate::i18n::current("Gentle launch"))
+                .on_hover_text(crate::i18n::current(
+                    "Downloads a few files at a time and starts the game at low priority, so a \
+                     computer that freezes under load stays usable. Starting takes longer.",
+                ));
+        });
+
+        section(ui, p, crate::i18n::current("Memory"), |ui| {
+            memory_slider(
+                ui,
+                crate::i18n::current("Maximum"),
+                &mut s.max_memory_mb,
+                MIN_MEMORY_MB,
+                MAX_MEMORY_SLIDER_MB,
+            );
+            let max = s.max_memory_mb;
+            memory_slider(
+                ui,
+                crate::i18n::current("Minimum"),
+                &mut s.min_memory_mb,
+                MIN_MEMORY_MB,
+                max,
+            );
+            ui.label(
+                RichText::new(crate::i18n::current(
+                    "4 GB suits vanilla. Giving Java more than it needs can cause stutter.",
+                ))
+                .small()
+                .color(p.muted),
+            );
+        });
+
+        section(ui, p, crate::i18n::current("Versions"), |ui| {
+            ui.checkbox(
+                &mut s.show_snapshots,
+                crate::i18n::current("Show snapshots"),
+            )
+            .on_hover_text(crate::i18n::current(crate::i18n::current(
+                "Weekly development builds. They can break worlds; back up first.",
+            )));
+            ui.checkbox(
+                &mut s.show_old_versions,
+                crate::i18n::current("Show old alpha and beta versions"),
+            );
+        });
+
+        section(ui, p, crate::i18n::current("Game window"), |ui| {
+            widgets::field_row(ui, |ui| {
+                ui.label(crate::i18n::current("Resolution"));
+                ui.add(egui::DragValue::new(&mut s.window_width).range(320..=MAX_RESOLUTION));
+                ui.label(crate::i18n::current("×"));
+                ui.add(egui::DragValue::new(&mut s.window_height).range(240..=MAX_RESOLUTION));
+                egui::ComboBox::from_id_salt("res_presets")
+                    .selected_text(crate::i18n::current("Presets"))
+                    .show_ui(ui, |ui| {
+                        for (w, h) in RESOLUTIONS {
+                            if ui.selectable_label(false, format!("{w} × {h}")).clicked() {
+                                (s.window_width, s.window_height) = (w, h);
+                            }
+                        }
+                    });
+            });
+            ui.checkbox(
+                &mut s.fullscreen,
+                crate::i18n::current("Start in fullscreen"),
+            );
+            ui.add_enabled(
+                !s.fullscreen,
+                egui::Checkbox::new(
+                    &mut s.game_maximized,
+                    crate::i18n::current("Start the game maximized"),
+                ),
+            )
+            .on_hover_text(crate::i18n::current(crate::i18n::current(
+                "The game window fills the screen, with the taskbar and title bar still there.",
+            )));
+            // macOS already runs OpenGL games on the gaming card.
+            if !cfg!(target_os = "macos") {
+                ui.checkbox(&mut s.high_performance_gpu, crate::i18n::current("Use the gaming graphics card"))
+                    .on_hover_text(
+                        crate::i18n::current("Laptops with two graphics cards: Minecraft runs on the fast one instead of the built-in one. A choice you made yourself (Windows' graphics settings, or PRIME variables on Linux) is kept."),
+                    );
+            }
+            widgets::field_row(ui, |ui| {
+                ui.label(crate::i18n::current("When the game starts"));
+                ui.selectable_value(
+                    &mut s.on_game_start,
+                    GameStartAction::KeepOpen,
+                    crate::i18n::current("Keep launcher open"),
+                );
+                ui.selectable_value(
+                    &mut s.on_game_start,
+                    GameStartAction::Minimize,
+                    crate::i18n::current("Minimize launcher"),
+                );
+            });
+            ui.checkbox(
+                &mut s.discord_presence,
+                crate::i18n::current("Show what you're playing on Discord"),
+            );
+            let presence_on = s.discord_presence;
+            ui.add_enabled_ui(presence_on, |ui| {
+                ui.indent("discord_show_server", |ui| {
+                    ui.checkbox(
+                        &mut s.discord_show_server,
+                        crate::i18n::current("Show server in Discord status"),
+                    )
+                    .on_hover_text(crate::discord::SHOW_SERVER_TIP)
+                    .on_disabled_hover_text(crate::i18n::current(crate::i18n::current(
+                        "Turn on \"Show what you're playing on Discord\" first.",
+                    )));
+                });
+            });
+            widgets::field_row(ui, |ui| {
+                ui.label(crate::i18n::current("Crash reports"))
+                    .on_hover_text(crate::i18n::current("When the game crashes, RICO can send its log so the crash can be fixed. Your name, folders and sign-in details are taken out first."));
+                ui.selectable_value(
+                    &mut s.crash_reports,
+                    CrashReports::Ask,
+                    crate::i18n::current("Ask me"),
+                );
+                ui.selectable_value(
+                    &mut s.crash_reports,
+                    CrashReports::Always,
+                    crate::i18n::current("Always send"),
+                );
+                ui.selectable_value(
+                    &mut s.crash_reports,
+                    CrashReports::Never,
+                    crate::i18n::current("Never"),
+                );
+            });
+            widgets::field_row(ui, |ui| {
+                ui.label(crate::i18n::current("Contact for crashes"))
+                    .on_hover_text(crate::i18n::current("Optional. Sent with a crash report so we can write back to you: a Discord name or an e-mail address. Leave it empty to stay anonymous."));
+                ui.add(
+                    egui::TextEdit::singleline(&mut s.crash_contact)
+                        .hint_text(crate::i18n::current("Discord name or e-mail (optional)"))
+                        .char_limit(80)
+                        .desired_width(240.0),
+                );
+            });
+        });
+
+        section(ui, p, "Java", |ui| {
+            ui.label(
+                RichText::new(crate::i18n::current(
+                    "RICO downloads the right Java for each version automatically.",
+                ))
+                .small()
+                .color(p.muted),
+            );
+            widgets::field_row(ui, |ui| {
+                ui.label(crate::i18n::current("Extra JVM arguments"));
+                ui.add(widgets::text_field(&mut s.extra_jvm_args).desired_width(320.0));
+            });
+            java_override(ui, p, s);
+        });
+
+        section(ui, p, crate::i18n::current("Updates"), |ui| {
+            if arctic_core::update::managed_by_flatpak() {
+                ui.label(crate::i18n::current(crate::i18n::current(
+                    "Updates are managed by your Linux software manager.",
+                )));
+                ui.checkbox(
+                    &mut s.show_release_notes,
+                    crate::i18n::current("Show what's new after updating"),
+                );
+                return;
+            }
+            widgets::field_row(ui, |ui| {
+                ui.label(crate::i18n::current("Channel"));
+                ui.selectable_value(
+                    &mut s.update_channel,
+                    UpdateChannel::Stable,
+                    crate::i18n::current("Stable"),
+                );
+                ui.selectable_value(
+                    &mut s.update_channel,
+                    UpdateChannel::Beta,
+                    crate::i18n::current("Beta"),
+                );
+            });
+            ui.checkbox(
+                &mut s.check_updates_on_start,
+                crate::i18n::current("Check for updates on start"),
+            )
+            .on_hover_text(crate::i18n::current(crate::i18n::current(
+                "A few seconds after the launcher opens, so it starts fast",
+            )));
+            ui.checkbox(&mut s.auto_install_updates, crate::i18n::current("Install updates automatically"))
+                .on_hover_text(
+                    crate::i18n::current("New versions download by themselves and are used the next time you open the launcher."),
+                );
+            ui.checkbox(
+                &mut s.restart_hidden_for_updates,
+                crate::i18n::current("Restart by itself when waiting in the tray"),
+            )
+            .on_hover_text(
+                crate::i18n::current("On by default: restart into an installed update while hidden in the tray with no game running. Off: use the update next time you open the launcher, or choose Restart now here."),
+            );
+            ui.checkbox(
+                &mut s.show_release_notes,
+                crate::i18n::current("Show what's new after updating"),
+            )
+            .on_hover_text(crate::i18n::current(crate::i18n::current(
+                "After an update, a popup lists what's new and what's fixed",
+            )));
+            if update_installed {
+                restart_update = widgets::button(
+                    ui,
+                    p,
+                    None,
+                    crate::i18n::current("Update installed - Restart now"),
+                    false,
+                )
+                .clicked();
+            }
+        });
+
+        if restart_update {
+            self.restart_after_update(ui.ctx());
+        }
+
+        section(ui, p, crate::i18n::current("Network"), |ui| {
+            self.network_section(ui, p)
+        });
+
+        section(ui, p, crate::i18n::current("Voice chat"), |ui| {
+            self.voice_section(ui, p)
+        });
+
+        section(
+            ui,
+            p,
+            crate::i18n::current("Shared between instances"),
+            |ui| {
+                ui.label(
+                RichText::new(
+                    crate::i18n::current("Kept the same in every instance of this profile: whatever you changed last is used everywhere, from the next start."),
+                )
+                .small()
+                .color(p.muted),
+            );
+                ui.add_space(4.0);
+                let shared = &mut self.settings.shared;
+                ui.checkbox(&mut shared.servers, crate::i18n::current("Server list"));
+                ui.checkbox(
+                    &mut shared.client,
+                    crate::i18n::current("RICO Client settings (HUD, crosshair, keys, waypoints)"),
+                );
+                ui.checkbox(
+                    &mut shared.game,
+                    crate::i18n::current("Minecraft settings (keys, video, sound, FOV)"),
+                );
+            },
+        );
+
+        section(
+            ui,
+            p,
+            crate::i18n::current("Game settings for new instances"),
+            |ui| self.game_defaults_section(ui, p),
+        );
+
+        section(ui, p, crate::i18n::current("Storage"), |ui| {
+            self.storage_section(ui, p)
+        });
+
+        section(ui, p, crate::i18n::current("Share & back up"), |ui| {
+            ui.label(
+                RichText::new(
+                    crate::i18n::current("Your settings, instances (as mod lists) and HUD setups, as a code, text or file. Accounts and passwords are never included."),
+                )
+                .small()
+                .color(p.muted),
+            );
+            ui.add_space(4.0);
+            crate::widgets::row(ui, |ui| {
+                if widgets::button(
+                    ui,
+                    p,
+                    Some(Icon::Share),
+                    crate::i18n::current("Export profile"),
+                    false,
+                )
+                .clicked()
+                {
+                    self.open_share(None);
+                }
+                if widgets::button(
+                    ui,
+                    p,
+                    Some(Icon::Import),
+                    crate::i18n::current("Import"),
+                    false,
+                )
+                .clicked()
+                {
+                    self.open_share_import();
+                }
+                if widgets::button(
+                    ui,
+                    p,
+                    Some(Icon::Layers),
+                    crate::i18n::current("From another launcher"),
+                    false,
+                )
+                .clicked()
+                {
+                    self.open_migrate();
+                }
+            });
+        });
+
+        crate::widgets::row(ui, |ui| {
+            if widgets::button(ui, p, None, crate::i18n::current("Desktop shortcut"), false)
+                .on_hover_text(crate::i18n::current(crate::i18n::current(
+                    "Puts an RICO shortcut on your desktop",
+                )))
+                .clicked()
+            {
+                match crate::desktop_shortcut::create() {
+                    Ok(path) => self.toasts.push(
+                        crate::toasts::Kind::Success,
+                        crate::i18n::current("Desktop shortcut made"),
+                        path.display().to_string(),
+                    ),
+                    Err(e) => self.toasts.push(
+                        crate::toasts::Kind::Error,
+                        crate::i18n::current("Couldn't make the shortcut"),
+                        e,
+                    ),
+                }
+            }
+            if widgets::button(ui, p, None, crate::i18n::current("Restore defaults"), false)
+                .clicked()
+            {
+                self.settings = Settings {
+                    last_version: self.settings.last_version.clone(),
+                    ..Settings::default()
+                };
+            }
+        });
+        if choose_picture {
+            self.tasks.pick_backdrop();
+        }
+        if performance != self.instance.performance {
+            let id = self.instance.id.clone();
+            if performance {
+                self.update_instance(&id, |i| i.performance = true);
+            } else {
+                self.performance_off_confirm = Some(id);
+            }
+        }
+    }
+}
+
+fn section(ui: &mut egui::Ui, p: &Palette, title: &str, body: impl FnOnce(&mut egui::Ui)) {
+    if group_of(title) != GROUP.with(|g| g.get()) {
+        return;
+    }
+    theme::card(p).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        let language = LANGUAGE.with(|language| language.get());
+        ui.label(
+            RichText::new(crate::i18n::text(language, title))
+                .size(17.0)
+                .strong()
+                .color(p.text),
+        );
+        ui.add_space(6.0);
+        body(ui);
+    });
+    ui.add_space(14.0);
+}
+
+fn memory_slider(ui: &mut egui::Ui, label: &str, value: &mut u32, min: u32, max: u32) {
+    ui.horizontal(|ui| {
+        ui.add_sized([80.0, 20.0], egui::Label::new(label));
+        ui.add(
+            egui::Slider::new(value, min..=max)
+                .step_by(MEMORY_STEP_MB)
+                .custom_formatter(|v, _| format!("{:.1} GB", v / 1024.0)),
+        );
+    });
+}
+
+/// Mini preview of a theme: its sky, a mountain and the accent. Returns
+/// true when clicked.
+fn theme_tile(ui: &mut egui::Ui, tp: &Palette, name: &str, selected: bool) -> bool {
+    let (rect, response) = ui.allocate_exact_size(vec2(112.0, 84.0), Sense::click());
+    let hover = ui
+        .ctx()
+        .animate_bool(response.id.with("h"), response.hovered());
+    let sel = ui.ctx().animate_bool(response.id.with("s"), selected);
+    let painter = ui.painter();
+    let preview = egui::Rect::from_min_size(rect.min, vec2(rect.width(), 58.0));
+    let [top, _, horizon] = tp.scene.sky;
+    painter.rect_filled(
+        preview,
+        CornerRadius::same(10),
+        lerp_color(top, horizon, 0.35),
+    );
+    let base = preview.bottom();
+    let peaks = [
+        // From where the tile's rounded corners end, or the mountains poke out of them.
+        egui::pos2(preview.left() + 10.0, base),
+        egui::pos2(preview.left() + 38.0, base - 30.0),
+        egui::pos2(preview.left() + 64.0, base - 12.0),
+        egui::pos2(preview.left() + 86.0, base - 26.0),
+        egui::pos2(preview.right() - 10.0, base),
+    ];
+    painter.add(egui::Shape::convex_polygon(
+        vec![peaks[0], peaks[1], peaks[2], peaks[4]],
+        tp.scene.mountains[0].0,
+        Stroke::NONE,
+    ));
+    painter.add(egui::Shape::convex_polygon(
+        vec![peaks[2], peaks[3], peaks[4]],
+        tp.scene.mountains[1].0,
+        Stroke::NONE,
+    ));
+    if tp.glass {
+        // A frosted pane over the mountains.
+        let pane = egui::Rect::from_min_size(preview.min + vec2(14.0, 16.0), vec2(60.0, 32.0));
+        painter.rect_filled(
+            pane,
+            CornerRadius::same(6),
+            egui::Color32::from_white_alpha(46),
+        );
+        painter.rect_stroke(
+            pane,
+            CornerRadius::same(6),
+            Stroke::new(1.0, egui::Color32::from_white_alpha(90)),
+            egui::StrokeKind::Inside,
+        );
+    }
+    painter.circle_filled(preview.right_top() + vec2(-16.0, 14.0), 6.0, tp.accent);
+    let ring = lerp_color(tp.card_stroke, tp.accent, sel.max(hover * 0.5));
+    painter.rect_stroke(
+        preview,
+        CornerRadius::same(10),
+        Stroke::new(1.0 + 1.5 * sel, ring),
+        StrokeKind::Outside,
+    );
+    let label_color = ui.visuals().text_color();
+    painter.text(
+        egui::pos2(rect.left() + 2.0, rect.bottom() - 10.0),
+        egui::Align2::LEFT_CENTER,
+        name,
+        egui::FontId::proportional(13.5),
+        label_color,
+    );
+    if selected {
+        let check = egui::Rect::from_center_size(
+            egui::pos2(rect.right() - 8.0, rect.bottom() - 10.0),
+            vec2(12.0, 12.0),
+        );
+        icons::draw(painter, Icon::Check, check, tp.accent);
+    }
+    response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .clicked()
+}
+
+fn java_override(ui: &mut egui::Ui, p: &Palette, s: &mut Settings) {
+    let mut enabled = s.java_override.is_some();
+    if ui
+        .checkbox(
+            &mut enabled,
+            crate::i18n::current("Use a custom Java executable"),
+        )
+        .changed()
+    {
+        s.java_override = enabled.then(PathBuf::new);
+    }
+    if let Some(path) = &mut s.java_override {
+        let mut text = path.display().to_string();
+        widgets::field_row(ui, |ui| {
+            ui.label(crate::i18n::current("Path to javaw.exe"));
+            if ui
+                .add(widgets::text_field(&mut text).desired_width(320.0))
+                .changed()
+            {
+                *path = PathBuf::from(text.trim());
+            }
+        });
+        if !path.as_os_str().is_empty() && !path.is_file() {
+            ui.label(
+                RichText::new(crate::i18n::current(
+                    "File not found; the managed runtime will be used.",
+                ))
+                .color(p.warn),
+            );
+        }
+    }
+}

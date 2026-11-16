@@ -1,0 +1,360 @@
+# Command line (`arctic`)
+
+`arctic.exe` is a headless companion to the launcher. It uses the same data folder,
+accounts, settings and downloads as the GUI, so you can script installs and launches,
+make desktop shortcuts, or run Minecraft on a machine you only reach over SSH.
+
+```powershell
+arctic launch                       # latest release as the active account
+arctic launch 1.21.4
+arctic launch latest --account Alex --memory 6G --wait
+arctic launch --instance fabric     # an instance, with its own version and mods
+arctic open --launch 1.20.1         # open the launcher window and start 1.20.1
+```
+
+Download `arctic-windows-x64.exe` or `arctic-linux-x64` from the
+[latest release](https://github.com/brksfrb/arctic-launcher/releases/latest) and put it on
+your `PATH` as `arctic`.
+
+## Global options
+
+| Option | Meaning |
+|---|---|
+| `-p, --profile <NAME>` | Work in this profile instead of the active one (also `ARCTIC_PROFILE`) |
+| `--data-dir <DIR>` | Use another data folder (also `ARCTIC_DATA_DIR`) |
+| `--json` | Machine-readable output: one JSON object per line on stdout |
+| `-v, --verbose` | Print launcher log messages to stderr |
+
+**Exit codes:** `0` success, `1` error, `2` bad usage. `launch --wait` returns the game's own
+exit code.
+
+## Commands
+
+### `arctic versions`
+
+```text
+arctic versions [--all] [--installed] [-n <LIMIT>]
+```
+
+Lists releases, newest first. `--all` includes snapshots and old alpha/beta versions.
+`--installed` shows only downloaded versions.
+
+```text
+26.3                   2026-09-15  installed  latest
+26.2                   2026-06-16
+```
+
+JSON: `{"id","type","released","installed","latest"}` per version.
+
+### `arctic install [VERSION]`
+
+Downloads everything a version needs (Java runtime, libraries, assets) without starting it.
+It uses the same parallel downloader as the launcher. `VERSION` may be an id, `latest`
+(default) or `latest-snapshot`.
+
+### `arctic launch [VERSION] [options]`
+
+Downloads whatever is missing, then starts Minecraft.
+
+| Option | Meaning |
+|---|---|
+| `-i, --instance <NAME>` | Launch an instance (id or name). Custom instances use their own Minecraft version |
+| `-a, --account <NAME>` | Saved account by username, UUID or id (default: the active account) |
+| `-m, --memory <SIZE>` | Max heap, e.g. `4G`, `6144M`, `6144` |
+| `--width <PX>` / `--height <PX>` | Window size |
+| `--fullscreen` | Start fullscreen |
+| `--server <ADDRESS>` | Join this server right away (`host` or `host:port`) |
+| `--world <FOLDER>` | Open this singleplayer world right away (Minecraft 1.20+) |
+| `--java <PATH>` | Use this `java(w).exe` instead of the managed runtime |
+| `-w, --wait` | Stay attached: print the game log, exit with the game's code |
+| `--dry-run` | Prepare everything and print the command line (token redacted) |
+
+Without `--wait`, the game is started **detached**: it keeps running after `arctic` exits,
+and its output goes to `profiles\<profile>\logs\game-vanilla.log`. Microsoft sessions are refreshed
+automatically when needed.
+
+### `arctic instances`
+
+```text
+arctic instances list
+arctic instances create <NAME> [--version <VERSION>] [--loader <LOADER>] [--loader-version <V>]
+arctic instances show <INSTANCE>
+arctic instances edit <INSTANCE> [--name N] [--version V] [--loader L] [--loader-version V]
+    [--memory 4G|default] [--icon classic|stellar|dendrite|plate|star|crystal] [--color #rrggbb|default]
+    [--arctic-client on|off] [--java PATH|default] [--jvm-args "FLAGS"] [--performance on|off] [--shaders on|off]
+    [--game-dir FOLDER|default [--keep-files]]
+arctic instances remove <INSTANCE>
+```
+
+`edit` changes only what's given. Changing the version or loader picks the newest stable
+loader build unless `--loader-version` says otherwise. The Vanilla instance follows the
+version picked to play, so its version and loader can't be pinned (make another instance).
+
+`--loader` is `vanilla` (default), `fabric`, `quilt`, `neoforge` or `forge`. Without
+`--loader-version`, the newest stable loader build for that Minecraft version is used.
+Removing an instance moves its folder (worlds included) to `instances/.trash`.
+
+`--game-dir` puts the instance's game (worlds, mods, packs, options) in a folder on any drive.
+Its files move there (the folder must be empty) unless `--keep-files`, which uses the folder as
+it is, for one that already holds a game. `default` brings it back inside the instance's folder.
+A game folder elsewhere is left alone when the instance is removed.
+
+```text
+arctic instances create "Fabric" --version 26.3 --loader fabric
+Created Fabric (Fabric 0.19.5, Minecraft 26.3). Start it with: arctic launch --instance fabric
+```
+
+JSON (`list`): `{"id","name","version","loader","loader_version"}` per instance.
+
+### `arctic mods`
+
+Mods come from [Modrinth](https://modrinth.com) and are matched to the instance's
+Minecraft version and loader. Required dependencies are installed too.
+
+```text
+arctic mods search <QUERY> --instance <INSTANCE> [-n <LIMIT>]
+arctic mods install <SLUG_OR_ID> --instance <INSTANCE>
+arctic mods list --instance <INSTANCE>
+arctic mods toggle <FILE> on|off --instance <INSTANCE>
+arctic mods remove <FILE> --instance <INSTANCE>
+arctic mods check --instance <INSTANCE>
+```
+
+```text
+arctic mods install sodium-extra --instance fabric
+Installed Sodium Extra 0.6.1
+Installed Sodium 0.6.13 (dependency)
+```
+
+JSON: `search` prints `{"id","slug","title","author","downloads","description"}`,
+`install` prints one `{"event":"installed",...}` per file, `list` prints
+`{"file","enabled","title","size"}`.
+
+`check` lists what would stop the game while loading (the same mod twice, a mod that
+breaks another, a missing or too old requirement, a mod for another Minecraft version)
+with the fixes the launcher offers, and exits with 1 when it finds any. The launcher runs
+the same check when you press Play. JSON: one `{"event":"clash","problem","fixes"}` each,
+or `{"event":"clean"}`.
+
+### `arctic modpacks`
+
+```text
+arctic modpacks search [QUERY] [-n <LIMIT>]
+arctic modpacks install <SLUG_OR_ID | FILE.mrpack>
+```
+
+Each modpack becomes a new instance with its loader, mods and config.
+
+```text
+arctic modpacks install fabulously-optimized
+Installed Fabulously Optimized (Fabric 26.3). Start it with: arctic launch --instance fabulously-optimized
+```
+
+### `arctic skins`
+
+Your skin library (the skins in the launcher's Cosmetics tab) and the community gallery.
+
+```text
+arctic skins list
+arctic skins add <PNG> [--name N] [--model classic|slim]
+arctic skins rename <SKIN> <NAME> | model <SKIN> classic|slim | remove <SKIN> | export <SKIN> <PNG>
+arctic skins wear <SKIN|none> [--account A]      (your RICO look; `none` = your Minecraft skin)
+arctic skins gallery [QUERY] [--new] [--page N]
+arctic skins take <GALLERY_ID> [--wear] | share <SKIN> [--name N] | report <GALLERY_ID>
+```
+
+`SKIN` is a library skin's id (or its first characters) or name.
+
+### `arctic screenshots`, `replays`, `logs`
+
+```text
+arctic screenshots list [--instance I] [-n N] | remove <FILE>
+arctic replays list [--instance I] | remove <NAME> [--instance I]
+arctic logs [--instance I | --launcher] [-n N] [--level warn|error] [--follow] [--path]
+```
+
+Removed screenshots and replays go to a `.trash` folder next to them. Watch a replay with
+`arctic launch --instance I --replay FILE`. `logs` shows an instance's last game log
+(`--follow` keeps printing new lines while the game runs).
+
+### `arctic accounts`
+
+```text
+arctic accounts list
+arctic accounts login [--browser]     # device code by default (works over SSH)
+arctic accounts use <ACCOUNT>
+arctic accounts remove <ACCOUNT>
+```
+
+`<ACCOUNT>` is a username (case-insensitive), a Minecraft UUID (with or without dashes),
+or the internal id.
+
+### `arctic profiles`
+
+```text
+arctic profiles list
+arctic profiles create <NAME> [--switch]
+arctic profiles use <PROFILE>
+arctic profiles rename <PROFILE> <NEW_NAME>
+arctic profiles remove <PROFILE>        # folder moves to profiles/.trash
+```
+
+Every command works on the active profile unless you pass `-p, --profile <NAME>` (or set
+`ARCTIC_PROFILE`), e.g. `arctic -p Speedruns launch 1.16.1`.
+
+### `arctic migrate`
+
+Brings instances over from other launchers and clients: version, loader, mods, configs,
+worlds, resource and shader packs, options and servers. Originals are never changed and
+accounts never come along. Supported: Minecraft Launcher, TLauncher, Prism, PolyMC,
+MultiMC (with `--folder`), Modrinth App, CurseForge, ATLauncher, GDLauncher (new and
+old), and the own mods of LabyMod, Lunar and Feather. LabyMod and Lunar HUD layouts and
+keys can be applied too.
+
+```text
+arctic migrate list [--folder <DIR>]
+arctic migrate instance <KEY_OR_NAME> [--skip mods,worlds,resourcepacks,shaderpacks,settings,screenshots] [--name <NAME>]
+arctic migrate all [--skip ...]
+arctic migrate hud <KEY> [--instance <INSTANCE>] [--on fps,coords,...]
+```
+
+While importing, mods are checked the way the loaders check them: mods their own files
+say won't run on that Minecraft version come switched off, a required mod the pack is
+missing is fetched from Modrinth, and mods are matched to Modrinth by hash so they can be
+updated and shared. Lunar saves only settings that differ from its defaults, so widgets
+without a saved on/off state are listed; `--on` picks them (default: the ones that were
+moved somewhere).
+
+### `arctic share` and `arctic import`
+
+Share an instance (version, loader and the exact Modrinth versions of its mods, no jar
+files), a HUD layout, a crosshair, all RICO Client settings, or a whole profile.
+
+```text
+arctic share instance|hud|crosshair|client|profile [--instance <INSTANCE>] [--as code|text|file] [--out <FILE>]
+arctic import <CODE | TEXT | FILE> [--instance <INSTANCE>]
+```
+
+A code (`abcd-efgh`) is stored on the RICO server and needs a signed-in account; text
+(`arctic1.…`) and `.json` files work without it. Accounts, the proxy, Java paths and JVM
+arguments are never included, and everything imported is checked value by value first.
+
+### `arctic bedrock`
+
+Minecraft: Bedrock Edition (Minecraft for Windows). `--preview` works on Minecraft Preview
+instead, and `--account <ID>` picks an Xbox account's folder for worlds and servers (the ids
+are in `status`; the default is the one played last).
+
+```text
+arctic bedrock status | play
+arctic bedrock versions [--all] | install <VERSION|latest>
+arctic bedrock worlds list | import <MCWORLD_OR_FOLDER> | export <WORLD> [--to FILE] | backup <WORLD> | remove <WORLD>
+arctic bedrock packs list | import <MCPACK_OR_MCADDON> | remove <NAME|UUID>
+arctic bedrock servers list [--no-ping] | ping <ADDRESS> | add <ADDRESS> [--name N] | remove <ADDRESS>
+```
+
+`install` switches the installed game to any version since 1.21.120, older or newer: Windows
+downloads the package from Microsoft and installs it over the current one, keeping worlds,
+packs and settings. The game must be owned on the Microsoft account signed in to the
+Microsoft Store, and the Store may update it again later. Removed worlds and packs go to
+`com.mojang\arctic-trash`; backups go to `bedrock\backups` in RICO's folder.
+
+### `arctic worlds`, `waypoints`, `servers`, `friends`, `defaults`, `skin`, `look`, `proxy`, `settings`, `crash`, `together`
+
+```text
+arctic worlds list|sources [--instance <I>]
+arctic servers list [--instance <I>] [--no-ping] | ping <ADDRESS> | add <ADDRESS> [--name N] [--instance <I>]
+arctic servers move <ADDRESS> [--before <ADDRESS>] [--instance <I>]
+arctic servers browse [--premium|--cracked] [--random]
+arctic servers submit <ADDRESS> --name N [--description D] [--tag T]... | verify <ID>
+    (submit goes straight to review; verify only reports that state)
+arctic servers review [--state pending] [--approve|--reject|--remove <ID>]   (needs ARCTIC_ADMIN_KEY)
+arctic friends list | add <CODE|NAME> | accept <NAME> | remove <NAME> [--account A]
+arctic friends recovery | restore <RECOVERY_CODE> [--account A]
+arctic friends chat <NAME> [--send TEXT]
+arctic defaults show | set <KEY> <VALUE> | unset <KEY> | capture [--instance I] | apply [--instance I] | clear
+arctic share options   (default game settings as a code)
+arctic friends invite <NAME> --server <ADDRESS> | --together <CODE>
+arctic friends profile [--name N] [--share-online B] [--share-server B] [--invites B] [--show-accounts B] [--link ACCOUNT] [--unlink ACCOUNT]
+arctic worlds import <FOLDER_OR_ZIP> | backup <WORLD> | remove <WORLD> [--instance <I>]
+arctic waypoints list [--world W] | add <NAME> <X> <Y> <Z> --world W [--dim D] | remove <NAME> --world W [--instance <I>]
+    (W is a server address, or sp:<world name>; the game's Compass and Minimap show them)
+arctic skin show | set <PNG> [--model classic|slim] | reset | cape <NAME|none>
+arctic look show | skin <PNG|none> | cape <PRESET|PNG|none> | wear [IDS...] | fit <ID> [--up N] [--forward N] [--mirror]
+arctic proxy show | set <HOST> [PORT] [--username U] [--password P] | off | test
+arctic settings show | get <KEY> | set <KEY> <VALUE>
+arctic crash [FILE] [--instance <I>]
+arctic together host [--port N] | join <CODE>
+```
+
+### `arctic java <VERSION>`
+
+Prints the Java executable that version uses, installing the runtime if needed. This is
+handy for running tools against the same JVM.
+
+### `arctic paths`
+
+Shows the data folder layout: settings, accounts, versions, libraries, assets, runtimes,
+instances and logs.
+
+### `arctic storage`
+
+```text
+arctic storage show
+arctic storage move <FOLDER|default>
+arctic storage use <FOLDER>
+```
+
+Where RICO keeps everything (Settings → Storage in the launcher). `move` copies it all to an
+empty folder (another drive, say) and uses it from then on; the old copy is removed the next
+time the launcher starts. Close the launcher first. `default` moves back to the usual place.
+`use` switches to a folder that already holds RICO's files, copying nothing. Not available
+when `ARCTIC_DATA_DIR`, `--data-dir` or portable mode (`portable.txt`) sets the folder.
+
+### `arctic update [--beta]`
+
+Checks GitHub Releases for a newer launcher. It only checks; installing happens in the
+GUI.
+
+### `arctic open [options]`
+
+Starts the launcher window, detached. Options are passed through to the GUI:
+
+| Option | Meaning |
+|---|---|
+| `--launch <VERSION>` | Start that version as soon as the version list loads |
+| `--account <NAME>` | Select this account first |
+| `--tab <TAB>` | `play`, `accounts`, `instances`, `logs`, `settings`, `about` |
+| `--no-intro` | Skip the intro animation |
+| `--profile <NAME>` | Open in this profile |
+
+The launcher exe is looked up next to `arctic.exe` (as `arctic-launcher.exe` or
+`RICO Launcher.exe`) or via `ARCTIC_LAUNCHER_EXE`.
+
+## GUI flags
+
+The same flags work on the launcher itself, which is useful for desktop shortcuts:
+
+```text
+"RICO Launcher.exe" --launch 1.21.4 --account Steve --profile Speedruns --no-intro
+```
+
+## JSON output
+
+With `--json`, every line on stdout is one JSON object. Long operations emit progress
+events:
+
+```json
+{"event":"progress","stage":"Downloading game files","files_done":812,"files_total":5634,"bytes_done":201326592,"bytes_total":695500800}
+{"event":"launched","version":"26.3","account":"Steve","pid":12345,"log":"C:\\...\\logs\\game-vanilla.log"}
+```
+
+With `launch --wait --json` you also get the parsed game output and the exit:
+
+```json
+{"event":"log","level":"info","text":"[Render thread/INFO] Setting user: Steve"}
+{"event":"window_ready"}
+{"event":"exited","code":0}
+```
+
+Errors are reported as `{"event":"error","message":"…"}` with exit code 1.

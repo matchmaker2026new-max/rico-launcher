@@ -1,0 +1,26 @@
+{
+	"schemaVersion": 1,
+	"id": "arctic",
+	"version": "${version}",
+		"name": "RICO Client",
+		"description": "RICO's Minecraft client: custom menus and styles, HUD widgets, friends, and cosmetics.",
+		"authors": ["RICO Launcher contributors"],
+		"license": "LicenseRef-RICO-Source-Available-Restricted",
+	"icon": "assets/arctic/icon.png",
+	"environment": "client",
+	"custom": {
+		"arctic:greets": ["polarium"]
+	},
+	"entrypoints": {
+<% if (startup) { %>		"preLaunch": ["com.arcticlauncher.mod.startup.EarlyStart"],
+<% } %>		"client": ["com.arcticlauncher.mod.ArcticMod"],
+		"polarium:light_state": ["com.arcticlauncher.mod.PolariumLightState"],
+		"polarium:posing": ["com.arcticlauncher.mod.PolariumPosing"]
+	},
+	"mixins": ["arctic.mixins.json"],
+	"depends": {
+		"fabricloader": ">=${loader_min}",
+		"minecraft": ${minecraft_range},
+		"java": ">=${java}"
+	}
+}

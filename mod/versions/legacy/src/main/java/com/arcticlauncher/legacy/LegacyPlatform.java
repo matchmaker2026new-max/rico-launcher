@@ -1,0 +1,1704 @@
+package com.arcticlauncher.legacy;
+
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
+
+import com.arcticlauncher.client.ArcticClient;
+import com.arcticlauncher.client.GameKey;
+import com.arcticlauncher.client.MenuAction;
+import com.arcticlauncher.client.Platform;
+import com.arcticlauncher.client.looks.Looks;
+import com.arcticlauncher.client.ui.Page;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.ConnectScreen;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.SettingsScreen;
+import net.minecraft.client.gui.screen.TitleScreen;
+import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
+import net.minecraft.client.gui.screen.options.LanguageOptionsScreen;
+import net.minecraft.client.gui.screen.world.SelectWorldScreen;
+import net.minecraft.client.network.PlayerListEntry;
+import net.minecraft.client.network.ServerInfo;
+import net.minecraft.client.option.GameOptions;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.resource.ResourcePackLoader;
+import net.minecraft.client.sound.PositionedSoundInstance;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.effect.StatusEffect;
+import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.mob.Monster;
+import net.minecraft.entity.player.ClientPlayerEntity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.Identifier;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.LightType;
+
+/** {@link Platform} for old Minecraft (1.8.9) on Legacy Fabric. */
+public final class LegacyPlatform implements Platform {
+	private static final int TICKS_PER_SECOND = 20;
+	private static final String[] ROMAN = {"", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"};
+	// Long enough to bridge a missed aim mid-fight, short enough to go away
+	// right after (it lingered 5 s).
+	private static final long TARGET_MEMORY_MS = 1500;
+	private static final float FULLBRIGHT_GAMMA = 16f;
+	private static final float MENTION_PITCH = 1.6f;
+
+	/** Perspective before Freelook switched to third person (-1: none). */
+	private int perspectiveBefore = -1;
+	/** Gamma before Fullbright took over (NaN: not overriding). */
+	private float gammaBefore = Float.NaN;
+	private static Entity lastAttacked;
+	private static long lastAttackTime;
+
+	private static MinecraftClient mc() {
+		return MinecraftClient.getInstance();
+	}
+
+	// ---- Basics --------------------------------------------------------------------
+
+	@Override
+	public String minecraftVersion() {
+		return FabricLoader.getInstance().getModContainer("minecraft")
+				.map(c -> c.getMetadata().getVersion().getFriendlyString()).orElse("1.8.9");
+	}
+
+	@Override
+	public File configDir() {
+		return FabricLoader.getInstance().getConfigDir().toFile();
+	}
+
+	@Override
+	public void log(boolean warning, String message) {
+		if (warning) {
+			ArcticLegacy.LOG.warn(message);
+		} else {
+			ArcticLegacy.LOG.info(message);
+		}
+	}
+
+	@Override
+	public int fps() {
+		return MinecraftClient.getCurrentFps();
+	}
+
+	@Override
+	public int ping() {
+		MinecraftClient mc = mc();
+		if (mc.getNetworkHandler() == null || mc.player == null || mc.isInSingleplayer()) {
+			return -1;
+		}
+		PlayerListEntry entry = mc.getNetworkHandler().getPlayerListEntry(mc.player.getUuid());
+		return entry == null ? -1 : entry.getLatency();
+	}
+
+	@Override
+	public int ping(java.util.UUID player) {
+		MinecraftClient mc = mc();
+		if (mc.getNetworkHandler() == null || mc.isInSingleplayer()) {
+			return -1;
+		}
+		PlayerListEntry entry = mc.getNetworkHandler().getPlayerListEntry(player);
+		return entry == null ? -1 : entry.getLatency();
+	}
+
+	@Override
+	public boolean inWorld() {
+		return mc().world != null && mc().player != null;
+	}
+
+	@Override
+	public boolean windowFocused() {
+		return org.lwjgl.opengl.Display.isActive();
+	}
+
+	@Override
+	public boolean atTitleScreen() {
+		Screen screen = mc().currentScreen;
+		return !inWorld() && (screen instanceof TitleScreen || (screen instanceof LegacyPageScreen
+				&& ((LegacyPageScreen) screen).page() instanceof com.arcticlauncher.client.menu.TitleMenu));
+	}
+
+	@Override
+	public double[] position() {
+		ClientPlayerEntity p = mc().player;
+		return p == null ? null : new double[] {p.x, p.y, p.z, p.yaw, p.pitch};
+	}
+
+	@Override
+	public boolean keyDown(GameKey key) {
+		return binding(key).isPressed();
+	}
+
+	private static KeyBinding binding(GameKey key) {
+		GameOptions o = mc().options;
+		switch (key) {
+			case FORWARD:
+				return o.forwardKey;
+			case BACK:
+				return o.backKey;
+			case LEFT:
+				return o.leftKey;
+			case RIGHT:
+				return o.rightKey;
+			case JUMP:
+				return o.jumpKey;
+			case SNEAK:
+				return o.sneakKey;
+			case SPRINT:
+				return o.sprintKey;
+			case ATTACK:
+				return o.attackKey;
+			case INVENTORY:
+				return o.inventoryKey;
+			case DROP:
+				return o.dropKey;
+			case PERSPECTIVE:
+				return o.togglePerspectiveKey;
+			case CHAT:
+				return o.chatKey;
+			case PLAYER_LIST:
+				return o.playerListKey;
+			case SWAP_HANDS:
+				// Unnamed in these mappings (and not in 1.8.9): found by its name.
+				for (KeyBinding k : o.allKeys) {
+					if ("key.swapHands".equals(k.getTranslationKey())) {
+						return k;
+					}
+				}
+				return null;
+			default:
+				return o.useKey;
+		}
+	}
+
+	@Override
+	public boolean readGamepad(com.arcticlauncher.client.controller.Gamepad pad) {
+		return LegacyGamepads.read(pad);
+	}
+
+	@Override
+	public void rescanGamepads() {
+		LegacyGamepads.rescan();
+	}
+
+	@Override
+	public void turnPlayer(double yaw, double pitch) {
+		if (mc().player != null) {
+			// Takes mouse movement: 0.15 degrees each.
+			mc().player.increaseTransforms((float) (yaw / 0.15), (float) -(pitch / 0.15));
+		}
+	}
+
+	@Override
+	public void tapKey(GameKey key) {
+		KeyBinding k = binding(key);
+		if (k != null && k.getCode() != 0) {
+			KeyBinding.onKeyPressed(k.getCode());
+		}
+	}
+
+	@Override
+	public void scrollHotbar(int step) {
+		if (mc().player != null) {
+			// The game's scroll: up (positive) is the previous slot.
+			mc().player.inventory.scrollInHotbar(-step);
+		}
+	}
+
+	@Override
+	public void back() {
+		if (mc().currentScreen == null) {
+			mc().openGameMenuScreen();
+		} else {
+			mc().setScreen(null);
+		}
+	}
+
+	@Override
+	public double[] cursor() {
+		// LWJGL 2 counts y from the bottom.
+		int h = org.lwjgl.opengl.Display.getHeight();
+		return new double[] {org.lwjgl.input.Mouse.getX(), h - 1 - org.lwjgl.input.Mouse.getY(), org.lwjgl.opengl.Display.getWidth(), h};
+	}
+
+	@Override
+	public void setCursor(double x, double y) {
+		org.lwjgl.input.Mouse.setCursorPosition((int) x, org.lwjgl.opengl.Display.getHeight() - 1 - (int) y);
+	}
+
+	@Override
+	public void mouseButton(int button, boolean down) {
+		Screen screen = mc().currentScreen;
+		if (screen == null) {
+			return;
+		}
+		double[] at = cursor();
+		int x = (int) (at[0] * screen.width / at[2]);
+		int y = (int) (at[1] * screen.height / at[3]);
+		com.arcticlauncher.legacy.mixin.ScreenClickInvoker s = (com.arcticlauncher.legacy.mixin.ScreenClickInvoker) screen;
+		try {
+			if (down) {
+				s.arctic$clicked(x, y, button);
+			} else {
+				s.arctic$released(x, y, button);
+			}
+		} catch (java.io.IOException e) {
+			ArcticLegacy.LOG.warn("a controller click failed", e);
+		}
+	}
+
+	@Override
+	public void scrollScreen(double amount) {
+		// Only Arctic's screens: the game's read the wheel straight from LWJGL.
+		if (mc().currentScreen instanceof LegacyPageScreen) {
+			((LegacyPageScreen) mc().currentScreen).scrollBy(amount > 0 ? 1 : -1);
+		}
+	}
+
+	@Override
+	public boolean physicalKeyDown(GameKey key) {
+		KeyBinding k = binding(key);
+		return k != null && LegacyKeys.isDown(k.getCode());
+	}
+
+	@Override
+	public void setKeyDown(GameKey key, boolean down) {
+		KeyBinding k = binding(key);
+		if (k != null) {
+			KeyBinding.setKeyPressed(k.getCode(), down);
+		}
+	}
+
+	@Override
+	public boolean keyHeld(GameKey key) {
+		KeyBinding k = binding(key);
+		return k != null && k.isPressed();
+	}
+
+	@Override
+	public String biome() {
+		MinecraftClient mc = mc();
+		if (mc.world == null || mc.player == null) {
+			return null;
+		}
+		//#if MC >= 1.9
+		return mc.world.getBiome(mc.player.getBlockPos()).getName();
+		//#else
+		return mc.world.getBiome(mc.player.getBlockPos()).name;
+		//#endif
+	}
+
+	@Override
+	public String connectingServer() {
+		MinecraftClient mc = mc();
+		return mc.isInSingleplayer() || mc.getCurrentServerEntry() == null ? null : mc.getCurrentServerEntry().address;
+	}
+
+	@Override
+	public String server() {
+		MinecraftClient mc = mc();
+		if (mc.world == null) {
+			return null;
+		}
+		if (mc.isInSingleplayer() || mc.getCurrentServerEntry() == null) {
+			return "Singleplayer";
+		}
+		return mc.getCurrentServerEntry().address;
+	}
+
+	@Override
+	public long dayTime() {
+		return mc().world == null ? -1 : mc().world.getTimeOfDay();
+	}
+
+	@Override
+	public boolean isKeyDown(String key) {
+		return LegacyKeys.isDown(key);
+	}
+
+	@Override
+	public String keyLabel(String key) {
+		return LegacyKeys.label(key);
+	}
+
+	@Override
+	public String keyName(int nativeKey) {
+		return LegacyKeys.name(nativeKey);
+	}
+
+	@Override
+	public void setThirdPerson(boolean on) {
+		GameOptions options = mc().options;
+		if (on) {
+			perspectiveBefore = options.perspective;
+			options.perspective = 1;
+		} else if (perspectiveBefore >= 0) {
+			options.perspective = perspectiveBefore;
+			perspectiveBefore = -1;
+		}
+	}
+
+	@Override
+	public boolean hasFeatures() {
+		return true;
+	}
+
+	/** How long Minecraft shows an achievement pop-up (ms); pop-ups and 1.12's toasts are this tall. */
+	private static final long ACHIEVEMENT_MS = 3000;
+	private static final int ACHIEVEMENT_H = 32;
+
+	//#if MC >= 1.12
+	/** The toast manager's on-screen slots (a package-private type, so read reflectively). */
+	private static java.lang.reflect.Field toastSlotsField;
+	private static boolean toastSlotsTried;
+
+	private static Object[] toastSlots(Object toasts) {
+		if (!toastSlotsTried) {
+			toastSlotsTried = true;
+			try {
+				toastSlotsField = toasts.getClass().getDeclaredField("field_15921");
+				toastSlotsField.setAccessible(true);
+			} catch (ReflectiveOperationException e) {
+				ArcticLegacy.LOG.warn("RICO: can't see the toasts ({}); notices may overlap them", e.toString());
+			}
+		}
+		try {
+			return toastSlotsField == null ? new Object[0] : (Object[]) toastSlotsField.get(toasts);
+		} catch (ReflectiveOperationException e) {
+			return new Object[0];
+		}
+	}
+	//#endif
+
+	@Override
+	public int toastsBottom() {
+		//#if MC >= 1.12
+		Object[] slots = toastSlots(((com.arcticlauncher.legacy.mixin.ToastsAccess) mc()).arctic$toasts());
+		for (int i = slots.length - 1; i >= 0; i--) {
+			if (slots[i] != null) {
+				return (i + 1) * ACHIEVEMENT_H;
+			}
+		}
+		return 0;
+		//#else
+		com.arcticlauncher.legacy.mixin.AchievementNotificationAccess n =
+				(com.arcticlauncher.legacy.mixin.AchievementNotificationAccess) mc().notification;
+		if (n == null || n.arctic$achievement() == null) {
+			return 0;
+		}
+		boolean showing = n.arctic$permanent() || MinecraftClient.getTime() - n.arctic$time() < ACHIEVEMENT_MS;
+		return showing ? ACHIEVEMENT_H : 0;
+		//#endif
+	}
+
+	@Override
+	public boolean outlineTweaks() {
+		return true;
+	}
+
+	@Override
+	public boolean hitColorWorks() {
+		return true;
+	}
+
+	@Override
+	public boolean oldAnimationsWork() {
+		//#if MC < 1.9
+		return true;
+		//#else
+		return false;
+		//#endif
+	}
+
+	@Override
+	public boolean motionBlurWorks() {
+		return true;
+	}
+
+	@Override
+	public boolean minimapWorks() {
+		return true;
+	}
+
+	@Override
+	public boolean movesVanillaParts() {
+		return true;
+	}
+
+	@Override
+	public boolean mapColumns(int x0, int z0, int w, int h, int[] out) {
+		return LegacyMinimap.columns(x0, z0, w, h, out);
+	}
+
+	@Override
+	public String minimapPixels(int[] argb, int size) {
+		return LegacyMinimap.upload(argb, size) ? "dyn:" + LegacyMinimap.KEY : null;
+	}
+
+	@Override
+	public boolean tooltipScrollWorks() {
+		return true;
+	}
+
+	@Override
+	public boolean glintWorks() {
+		return true;
+	}
+
+	@Override
+	public boolean dynamicFovWorks() {
+		return true;
+	}
+
+	@Override
+	public boolean cooldownsWork() {
+		//#if MC >= 1.9
+		return true;
+		//#else
+		return false;
+		//#endif
+	}
+
+	@Override
+	public float cooldown(String idPart) {
+		//#if MC >= 1.9
+		net.minecraft.entity.player.ClientPlayerEntity player = mc().player;
+		net.minecraft.item.Item item = "ender_pearl".equals(idPart) ? net.minecraft.item.Items.ENDER_PEARL
+				: "chorus_fruit".equals(idPart) ? net.minecraft.item.Items.CHORUS_FRUIT
+				: "shield".equals(idPart) ? net.minecraft.item.Items.SHIELD : null;
+		if (player != null && item != null) {
+			return player.getItemCooldownManager().getCooldownProgress(item, 0f);
+		}
+		//#endif
+		return -1f;
+	}
+
+	@Override
+	public boolean fogWorks() {
+		return true;
+	}
+
+	@Override
+	public boolean horseStatsWorks() {
+		return true;
+	}
+
+	@Override
+	public float[] horseStats() {
+		ClientPlayerEntity p = mc().player;
+		if (p == null) {
+			return null;
+		}
+		//#if MC >= 1.9
+		Entity e = p.getVehicle();
+		//#else
+		Entity e = p.vehicle;
+		//#endif
+		//#if MC >= 1.11
+		// 1.11 split the horses: the common class is AbstractHorseEntity, its jump strength still unnamed.
+		if (!(e instanceof net.minecraft.entity.AbstractHorseEntity)) {
+			e = aimedEntity();
+		}
+		if (!(e instanceof net.minecraft.entity.AbstractHorseEntity)) {
+			return null;
+		}
+		net.minecraft.entity.AbstractHorseEntity horse = (net.minecraft.entity.AbstractHorseEntity) e;
+		double strength = horse.method_13999();
+		//#else
+		if (!(e instanceof net.minecraft.entity.passive.HorseBaseEntity)) {
+			e = aimedEntity();
+		}
+		if (!(e instanceof net.minecraft.entity.passive.HorseBaseEntity)) {
+			return null;
+		}
+		net.minecraft.entity.passive.HorseBaseEntity horse = (net.minecraft.entity.passive.HorseBaseEntity) e;
+		double strength = horse.getJumpStrength();
+		//#endif
+		double speed = horse.initializeAttribute(net.minecraft.entity.attribute.EntityAttributes.GENERIC_MOVEMENT_SPEED).getValue();
+		double jump = -0.1817584952 * strength * strength * strength + 3.689713992 * strength * strength + 2.128599134 * strength
+				- 0.343930367;
+		return new float[] {(float) (speed * 43.17), (float) jump, horse.getHealth(), horse.getMaxHealth()};
+	}
+
+	@Override
+	public boolean chunkBordersWorks() {
+		return true;
+	}
+
+	@Override
+	public boolean itemPhysicsWorks() {
+		return true;
+	}
+
+	@Override
+	public boolean scoreboardTweaks() {
+		return true;
+	}
+
+	@Override
+	public boolean smoothFont() {
+		return LegacySmoothFont.on();
+	}
+
+	/** Nothing to reload: the text renderer asks LegacySmoothFont every time it draws. */
+	@Override
+	public void setSmoothFont(boolean on) {}
+
+	@Override
+	public void reloadFonts() {
+		LegacySmoothFont.rebuild();
+	}
+
+	/**
+	 * Each tick: Fullbright raises gamma while on, and gives it back after. The value from before is kept in
+	 * arctic.json, because anything that saves options.txt meanwhile writes the raised gamma to disk; a
+	 * leaked value is put back here (also after a crash or a restart with Fullbright already on).
+	 */
+	void tick() {
+		GameOptions options = mc().options;
+		vboOnce(options);
+		boolean bright = ArcticClient.features() != null && ArcticClient.features().fullbright();
+		if (bright) {
+			if (Float.isNaN(gammaBefore)) {
+				gammaBefore = options.gamma > 1f ? savedGamma() : options.gamma;
+				ArcticClient.config().legacyGammaBefore = gammaBefore;
+				ArcticClient.saveConfig();
+			}
+			options.gamma = FULLBRIGHT_GAMMA;
+		} else if (!Float.isNaN(gammaBefore)) {
+			options.gamma = Math.max(0f, Math.min(1f, gammaBefore));
+			gammaBefore = Float.NaN;
+			options.save();
+		} else if (options.gamma > 1f) {
+			options.gamma = savedGamma();
+			options.save();
+		}
+	}
+
+	/** The brightness the player had before Fullbright, or the vanilla default when none was recorded. */
+	private static float savedGamma() {
+		float saved = ArcticClient.config().legacyGammaBefore;
+		return saved >= 0f && saved <= 1f ? saved : 0f;
+	}
+
+	/**
+	 * Vertex buffers: off in Minecraft's defaults, many more frames per second on. Switched on once
+	 * (before a world is open, so nothing has to be rebuilt); the player can turn them off again. Not with Polarium.
+	 */
+	private void vboOnce(GameOptions options) {
+		if (ArcticClient.config().legacyVboOn || mc().world != null) {
+			return;
+		}
+		if (FabricLoader.getInstance().isModLoaded("polarium")) {
+			// Polarium draws a region of terrain per call from display lists, which vertex buffers would turn off
+			return;
+		}
+		ArcticClient.config().legacyVboOn = true;
+		ArcticClient.saveConfig();
+		if (!options.vbo) {
+			options.vbo = true;
+			options.save();
+			ArcticLegacy.LOG.info("vertex buffers switched on (Video Settings: Use VBOs)");
+		}
+	}
+
+	// ---- Player and world ----------------------------------------------------------
+
+	@Override
+	public int hurtTime() {
+		ClientPlayerEntity p = mc().player;
+		return p == null ? 0 : p.hurtTime;
+	}
+
+	@Override
+	public List<Object[]> armor() {
+		ClientPlayerEntity p = mc().player;
+		if (p == null) {
+			return Collections.emptyList();
+		}
+		List<Object[]> rows = new ArrayList<Object[]>();
+		// Helmet first (the list is boots → helmet), then the held item.
+		List<ItemStack> armor = armorSlots(p);
+		for (int i = armor.size() - 1; i >= 0; i--) {
+			addArmorRow(rows, armor.get(i));
+		}
+		addArmorRow(rows, p.inventory.getMainHandStack());
+		return rows;
+	}
+
+	/** Worn armor, boots first. */
+	private static List<ItemStack> armorSlots(ClientPlayerEntity p) {
+		//#if MC >= 1.11
+		return p.inventory.field_15083;
+		//#else
+		return java.util.Arrays.asList(p.inventory.armor);
+		//#endif
+	}
+
+	/** The 36 main inventory slots (hotbar first). */
+	private static List<ItemStack> mainSlots(ClientPlayerEntity p) {
+		//#if MC >= 1.11
+		return p.inventory.field_15082;
+		//#else
+		return java.util.Arrays.asList(p.inventory.main);
+		//#endif
+	}
+
+	/** Something in the slot (1.11+ uses an empty stack for nothing, older versions null). */
+	private static boolean present(ItemStack stack) {
+		//#if MC >= 1.11
+		return stack != null && !stack.isEmpty();
+		//#else
+		return stack != null;
+		//#endif
+	}
+
+	private static int count(ItemStack stack) {
+		//#if MC >= 1.11
+		return stack.getCount();
+		//#else
+		return stack.count;
+		//#endif
+	}
+
+	private static void addArmorRow(List<Object[]> rows, ItemStack stack) {
+		if (present(stack)) {
+			String text = stack.isDamageable() ? String.valueOf(stack.getMaxDamage() - stack.getDamage()) : null;
+			rows.add(new Object[] {stack, text});
+		}
+	}
+
+	@Override
+	public List<Object[]> effects() {
+		ClientPlayerEntity p = mc().player;
+		if (p == null) {
+			return Collections.emptyList();
+		}
+		List<Object[]> rows = new ArrayList<Object[]>();
+		Collection<StatusEffectInstance> active = p.getStatusEffectInstances();
+		for (StatusEffectInstance e : active) {
+			//#if MC >= 1.9
+			StatusEffect effect = e.getStatusEffect();
+			//#else
+			StatusEffect effect = StatusEffect.STATUS_EFFECTS[e.getEffectId()];
+			//#endif
+			if (effect == null) {
+				continue;
+			}
+			int level = e.getAmplifier();
+			String name = net.minecraft.client.resource.language.I18n.translate(effect.getTranslationKey())
+					+ (level > 0 && level < ROMAN.length ? " " + ROMAN[level] : "");
+			int seconds = e.getDuration() / TICKS_PER_SECOND;
+			String time = seconds / 60 + ":" + String.format("%02d", seconds % 60);
+			Object sprite = effect.hasIcon() ? Integer.valueOf(effect.getIconLevel()) : null;
+			rows.add(new Object[] {name, time, effect.getColor(), sprite});
+		}
+		return rows;
+	}
+
+	@Override
+	public Object[] heldItem() {
+		ClientPlayerEntity p = mc().player;
+		if (p == null || !present(p.inventory.getMainHandStack())) {
+			return null;
+		}
+		ItemStack held = p.inventory.getMainHandStack();
+		int total = 0;
+		for (ItemStack it : mainSlots(p)) {
+			if (present(it) && it.getItem() == held.getItem() && it.getDamage() == held.getDamage()) {
+				total += count(it);
+			}
+		}
+		return new Object[] {held, total};
+	}
+
+	// ---- Client Sort -------------------------------------------------------------------
+
+	/** The open chest or inventory screen's slots (not the creative inventory, whose slots aren't the game's), or null. */
+	private static List<?> sortContainer() {
+		MinecraftClient mc = mc();
+		if (mc.player == null || mc.player.openScreenHandler == null
+				|| !(mc.currentScreen instanceof net.minecraft.client.gui.screen.ingame.HandledScreen)
+				|| mc.currentScreen instanceof net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen) {
+			return null;
+		}
+		return mc.player.openScreenHandler.slots;
+	}
+
+	@Override
+	public boolean sortScreenOpen() {
+		return sortContainer() != null;
+	}
+
+	@Override
+	public int[] sortSlots() {
+		List<?> all = sortContainer();
+		net.minecraft.inventory.slot.Slot focus = LegacyHooks.sortFocus();
+		if (all == null || focus == null) {
+			return null;
+		}
+		boolean own = focus.inventory instanceof net.minecraft.entity.player.PlayerInventory;
+		if (own) {
+			int at = ((com.arcticlauncher.legacy.mixin.SlotInvAccess) focus).arctic$invSlot();
+			if (at < 9 || at > 35) {
+				// The hotbar and armor keep their places.
+				return null;
+			}
+		}
+		List<Integer> picked = new ArrayList<Integer>();
+		for (int i = 0; i < all.size(); i++) {
+			net.minecraft.inventory.slot.Slot s = (net.minecraft.inventory.slot.Slot) all.get(i);
+			if (own) {
+				if (s.inventory instanceof net.minecraft.entity.player.PlayerInventory) {
+					int at = ((com.arcticlauncher.legacy.mixin.SlotInvAccess) s).arctic$invSlot();
+					if (at >= 9 && at <= 35) {
+						picked.add(i);
+					}
+				}
+			} else if (s.inventory == focus.inventory) {
+				picked.add(i);
+			}
+		}
+		int[] out = new int[picked.size()];
+		for (int i = 0; i < out.length; i++) {
+			out[i] = picked.get(i);
+		}
+		return out;
+	}
+
+	@Override
+	public Object[] slotInfo(int slot) {
+		List<?> all = sortContainer();
+		if (all == null || slot < 0 || slot >= all.size()) {
+			return null;
+		}
+		ItemStack st = ((net.minecraft.inventory.slot.Slot) all.get(slot)).getStack();
+		if (!present(st)) {
+			return null;
+		}
+		String name = st.getCustomName();
+		String key = System.identityHashCode(st.getItem()) + ":" + st.getDamage() + ":" + name;
+		return new Object[] {key, name, count(st), st.getMaxCount()};
+	}
+
+	@Override
+	public void slotClick(int slot) {
+		MinecraftClient mc = mc();
+		if (sortContainer() == null || mc.interactionManager == null) {
+			return;
+		}
+		//#if MC >= 1.9
+		mc.interactionManager.method_1224(mc.player.openScreenHandler.syncId, slot, 0, net.minecraft.util.ItemAction.PICKUP, mc.player);
+		//#else
+		mc.interactionManager.clickSlot(mc.player.openScreenHandler.syncId, slot, 0, 0, mc.player);
+		//#endif
+	}
+
+	@Override
+	public boolean cursorHolds() {
+		ClientPlayerEntity p = mc().player;
+		return p != null && present(p.inventory.getCursorStack());
+	}
+
+	@Override
+	public List<Object[]> carried() {
+		ClientPlayerEntity p = mc().player;
+		if (p == null) {
+			return Collections.emptyList();
+		}
+		java.util.Map<String, Object[]> kinds = new java.util.LinkedHashMap<String, Object[]>();
+		for (ItemStack it : mainSlots(p)) {
+			if (!present(it)) {
+				continue;
+			}
+			String name = it.getCustomName();
+			String key = System.identityHashCode(it.getItem()) + ":" + it.getDamage() + ":" + name;
+			Object[] row = kinds.get(key);
+			if (row == null) {
+				kinds.put(key, new Object[] {key, it.copy(), name, count(it)});
+			} else {
+				row[3] = (Integer) row[3] + count(it);
+			}
+		}
+		return new ArrayList<Object[]>(kinds.values());
+	}
+
+	@Override
+	public Object sampleItem(String id) {
+		String path = id.contains(":") ? id.substring(id.indexOf(':') + 1) : id;
+		net.minecraft.item.Item item = net.minecraft.item.Item.REGISTRY.get(new Identifier(path));
+		return item == null ? null : new ItemStack(item);
+	}
+
+	@Override
+	public Object effectSprite(String id) {
+		String path = id.contains(":") ? id.substring(id.indexOf(':') + 1) : id;
+		StatusEffect effect = StatusEffect.get(path);
+		return effect != null && effect.hasIcon() ? Integer.valueOf(effect.getIconLevel()) : null;
+	}
+
+	/** You hit something (from the attack hook): remember it and report the reach. */
+	static double attacked(Entity target) {
+		lastAttacked = target;
+		lastAttackTime = System.currentTimeMillis();
+		ClientPlayerEntity p = mc().player;
+		if (p == null) {
+			return -1;
+		}
+		double eyeY = p.y + p.getEyeHeight();
+		double dx = Math.max(target.getBoundingBox().minX - p.x, Math.max(0, p.x - target.getBoundingBox().maxX));
+		double dy = Math.max(target.getBoundingBox().minY - eyeY, Math.max(0, eyeY - target.getBoundingBox().maxY));
+		double dz = Math.max(target.getBoundingBox().minZ - p.z, Math.max(0, p.z - target.getBoundingBox().maxZ));
+		return Math.sqrt(dx * dx + dy * dy + dz * dz);
+	}
+
+	@Override
+	public Object[] target() {
+		Entity aimed = aimedEntity();
+		Entity e = aimed instanceof LivingEntity ? aimed
+				: System.currentTimeMillis() - lastAttackTime < TARGET_MEMORY_MS ? lastAttacked : null;
+		if (!(e instanceof LivingEntity) || !e.isAlive()) {
+			return null;
+		}
+		LivingEntity living = (LivingEntity) e;
+		return new Object[] {living.getName().asUnformattedString(), living.getHealth(), living.getMaxHealth()};
+	}
+
+	private static Entity aimedEntity() {
+		BlockHitResult hit = mc().result;
+		return hit != null && hit.type == BlockHitResult.Type.ENTITY ? hit.entity : null;
+	}
+
+	@Override
+	public String aimedName() {
+		BlockHitResult hit = mc().result;
+		if (hit == null || mc().world == null) {
+			return null;
+		}
+		if (hit.type == BlockHitResult.Type.ENTITY && hit.entity != null) {
+			return hit.entity.getName().asUnformattedString();
+		}
+		if (hit.type == BlockHitResult.Type.BLOCK) {
+			return mc().world.getBlockState(hit.getBlockPos()).getBlock().getTranslatedName();
+		}
+		return null;
+	}
+
+	@Override
+	public int aimKind() {
+		Entity e = aimedEntity();
+		if (e instanceof PlayerEntity) {
+			return 1;
+		}
+		if (e instanceof Monster) {
+			return 2;
+		}
+		return e instanceof LivingEntity ? 3 : 0;
+	}
+
+	@Override
+	public boolean hudHidden() {
+		return mc().options.hudHidden || mc().options.debugEnabled;
+	}
+
+	@Override
+	public boolean localMoving() {
+		ClientPlayerEntity p = mc().player;
+		return p != null && (p.input.movementForward != 0 || p.input.movementSideways != 0 || p.input.jumping || p.input.sneaking);
+	}
+
+	@Override
+	public UUID worldPlayerId() {
+		return mc().player == null ? null : mc().player.getUuid();
+	}
+
+	@Override
+	public List<Object[]> otherPlayers() {
+		List<Object[]> out = new ArrayList<Object[]>();
+		MinecraftClient mc = mc();
+		if (mc.world == null) {
+			return out;
+		}
+		UUID self = worldPlayerId();
+		for (PlayerEntity p : mc.world.playerEntities) {
+			if (!p.getUuid().equals(self)) {
+				out.add(new Object[] {p.getUuid(), p.getGameProfile().getName(), p.x, p.y, p.z, (double) p.yaw});
+			}
+		}
+		return out;
+	}
+
+	@Override
+	public int[] light() {
+		MinecraftClient mc = mc();
+		if (mc.world == null || mc.player == null) {
+			return null;
+		}
+		BlockPos pos = mc.player.getBlockPos();
+		return new int[] {mc.world.getLightAtPos(LightType.BLOCK, pos), mc.world.getLightAtPos(LightType.SKY, pos)};
+	}
+
+	@Override
+	public java.util.List<Object[]> arrows() {
+		ClientPlayerEntity p = mc().player;
+		if (p == null) {
+			return java.util.Collections.emptyList();
+		}
+		java.util.Map<String, Object[]> kinds = new java.util.LinkedHashMap<String, Object[]>();
+		for (ItemStack stack : mainSlots(p)) {
+			if (!present(stack)) {
+				continue;
+			}
+			Identifier id = (Identifier) net.minecraft.item.Item.REGISTRY.getIdentifier(stack.getItem());
+			if (id == null || !id.getPath().endsWith("arrow")) {
+				continue;
+			}
+			// The name tells tipped kinds apart ("Arrow of Poison").
+			String kind = stack.getCustomName();
+			Object[] row = kinds.get(kind);
+			if (row == null) {
+				kinds.put(kind, new Object[] {stack, count(stack)});
+			} else {
+				row[1] = (Integer) row[1] + count(stack);
+			}
+		}
+		return new java.util.ArrayList<Object[]>(kinds.values());
+	}
+
+	@Override
+	public int countItems(String idPart) {
+		ClientPlayerEntity p = mc().player;
+		if (p == null) {
+			return -1;
+		}
+		int n = 0;
+		for (ItemStack stack : mainSlots(p)) {
+			if (present(stack)) {
+				Identifier id = (Identifier) net.minecraft.item.Item.REGISTRY.getIdentifier(stack.getItem());
+				if (id != null && id.getPath().contains(idPart)) {
+					n += count(stack);
+				}
+			}
+		}
+		return n;
+	}
+
+	@Override
+	public boolean hungerBarShown() {
+		MinecraftClient mc = mc();
+		if (mc.player == null || mc.interactionManager == null || !mc.interactionManager.hasStatusBars()) {
+			return false;
+		}
+		//#if MC >= 1.9
+		return mc.player.getVehicle() == null || !(mc.player.getVehicle() instanceof net.minecraft.entity.LivingEntity);
+		//#else
+		return !mc.player.hasVehicle() || !(mc.player.vehicle instanceof net.minecraft.entity.LivingEntity);
+		//#endif
+	}
+
+	@Override
+	public float[] food() {
+		ClientPlayerEntity p = mc().player;
+		return p == null ? null : new float[] {p.getHungerManager().getFoodLevel(), p.getHungerManager().getSaturationLevel()};
+	}
+
+	@Override
+	public List<Object[]> durability() {
+		ClientPlayerEntity p = mc().player;
+		if (p == null) {
+			return Collections.emptyList();
+		}
+		List<Object[]> rows = new ArrayList<Object[]>();
+		String[] slots = {"feet", "legs", "chest", "head"};
+		List<ItemStack> armor = armorSlots(p);
+		for (int i = 0; i < armor.size(); i++) {
+			addDurability(rows, armor.get(i), slots[Math.min(i, slots.length - 1)]);
+		}
+		addDurability(rows, p.inventory.getMainHandStack(), "mainhand");
+		return rows;
+	}
+
+	private static void addDurability(List<Object[]> rows, ItemStack stack, String slot) {
+		if (present(stack) && stack.isDamageable()) {
+			rows.add(new Object[] {stack.getCustomName(), stack.getMaxDamage() - stack.getDamage(), stack.getMaxDamage(), slot});
+		}
+	}
+
+	@Override
+	public boolean dead() {
+		ClientPlayerEntity p = mc().player;
+		return p != null && p.getHealth() <= 0;
+	}
+
+	@Override
+	public String resourcePack() {
+		List<ResourcePackLoader.Entry> selected = mc().getResourcePackLoader().getSelectedResourcePacks();
+		return selected.isEmpty() ? null : selected.get(selected.size() - 1).getName().replaceAll("\\.zip$", "");
+	}
+
+	@Override
+	public File resourcePackDir() {
+		return mc().getResourcePackLoader().getResourcePackDir();
+	}
+
+	@Override
+	public void enableResourcePack(String fileName) {
+		MinecraftClient mc = mc();
+		ResourcePackLoader loader = mc.getResourcePackLoader();
+		loader.initResourcePacks();
+		for (ResourcePackLoader.Entry entry : loader.getAvailableResourcePacks()) {
+			if (!entry.getName().equals(fileName)) {
+				continue;
+			}
+			List<ResourcePackLoader.Entry> selected = new ArrayList<ResourcePackLoader.Entry>(loader.getSelectedResourcePacks());
+			selected.remove(entry);
+			selected.add(entry);
+			loader.setSelectedResourcePacks(selected);
+			// Same order as the loader's list: bottom to top.
+			mc.options.resourcePacks.clear();
+			for (ResourcePackLoader.Entry e : selected) {
+				mc.options.resourcePacks.add(e.getName());
+			}
+			mc.options.save();
+			mc.reloadResources();
+			return;
+		}
+		ArcticLegacy.LOG.warn("pack {} isn't available after the download", fileName);
+	}
+
+	@Override
+	public List<com.arcticlauncher.client.packs.PackInfo> resourcePacks() {
+		ResourcePackLoader loader = mc().getResourcePackLoader();
+		loader.initResourcePacks();
+		// The loader's selected list runs bottom to top.
+		List<ResourcePackLoader.Entry> selected = new ArrayList<ResourcePackLoader.Entry>(loader.getSelectedResourcePacks());
+		List<com.arcticlauncher.client.packs.PackInfo> out = new ArrayList<com.arcticlauncher.client.packs.PackInfo>();
+		for (int i = selected.size() - 1; i >= 0; i--) {
+			out.add(info(selected.get(i), true));
+		}
+		List<com.arcticlauncher.client.packs.PackInfo> off = new ArrayList<com.arcticlauncher.client.packs.PackInfo>();
+		for (ResourcePackLoader.Entry e : loader.getAvailableResourcePacks()) {
+			if (!selected.contains(e)) {
+				off.add(info(e, false));
+			}
+		}
+		off.sort((a, b) -> a.title.compareToIgnoreCase(b.title));
+		out.addAll(off);
+		return out;
+	}
+
+	private com.arcticlauncher.client.packs.PackInfo info(ResourcePackLoader.Entry e, boolean on) {
+		String name = e.getName();
+		String title = name.toLowerCase(java.util.Locale.ROOT).endsWith(".zip") ? name.substring(0, name.length() - 4) : name;
+		return new com.arcticlauncher.client.packs.PackInfo(name, title, e.getDescription(), on, false, new java.io.File(resourcePackDir(), name));
+	}
+
+	@Override
+	public void setResourcePacks(List<String> enabledTopFirst) {
+		MinecraftClient mc = mc();
+		ResourcePackLoader loader = mc.getResourcePackLoader();
+		loader.initResourcePacks();
+		List<ResourcePackLoader.Entry> bottomFirst = new ArrayList<ResourcePackLoader.Entry>();
+		for (int i = enabledTopFirst.size() - 1; i >= 0; i--) {
+			for (ResourcePackLoader.Entry e : loader.getAvailableResourcePacks()) {
+				if (e.getName().equals(enabledTopFirst.get(i))) {
+					bottomFirst.add(e);
+				}
+			}
+		}
+		loader.setSelectedResourcePacks(bottomFirst);
+		mc.options.resourcePacks.clear();
+		for (ResourcePackLoader.Entry e : bottomFirst) {
+			mc.options.resourcePacks.add(e.getName());
+		}
+		mc.options.save();
+		mc.reloadResources();
+	}
+
+	@Override
+	public String worldKey() {
+		MinecraftClient mc = mc();
+		if (mc.world == null) {
+			return null;
+		}
+		if (mc.getServer() != null) {
+			return "sp:" + mc.getServer().getLevelName();
+		}
+		ServerInfo server = mc.getCurrentServerEntry();
+		return server == null ? "unknown" : server.address.toLowerCase(java.util.Locale.ROOT);
+	}
+
+	@Override
+	public String dimension() {
+		ClientPlayerEntity p = mc().player;
+		if (p == null) {
+			return "overworld";
+		}
+		switch (p.dimension) {
+			case -1:
+				return "the_nether";
+			case 1:
+				return "the_end";
+			default:
+				return "overworld";
+		}
+	}
+
+	@Override
+	public int playerCount() {
+		return mc().getNetworkHandler() == null ? -1 : mc().getNetworkHandler().getPlayerList().size();
+	}
+
+	@Override
+	public int entityCount() {
+		return mc().world == null ? -1 : mc().world.loadedEntities.size();
+	}
+
+	@Override
+	public int[] primedTnt(double range) {
+		if (mc().world == null || mc().player == null) {
+			return null;
+		}
+		int soonest = Integer.MAX_VALUE;
+		int count = 0;
+		for (net.minecraft.entity.Entity e : new java.util.ArrayList<net.minecraft.entity.Entity>(mc().world.loadedEntities)) {
+			if (!(e instanceof net.minecraft.entity.TntEntity) || e.squaredDistanceTo(mc().player) > range * range) {
+				continue;
+			}
+			count++;
+			//#if MC >= 1.9
+			soonest = Math.min(soonest, ((net.minecraft.entity.TntEntity) e).getFuse());
+			//#else
+			soonest = Math.min(soonest, ((net.minecraft.entity.TntEntity) e).fuseTimer);
+			//#endif
+		}
+		return count == 0 ? null : new int[] {Math.max(0, soonest), count};
+	}
+
+	@Override
+	public boolean canSimpleVoiceChat() {
+		return LegacySvc.ENABLED;
+	}
+
+	@Override
+	public void requestSimpleVoiceChat() {
+		mc().submit(new Runnable() {
+			@Override
+			public void run() {
+				net.minecraft.client.network.ClientPlayNetworkHandler handler = mc().getNetworkHandler();
+				if (handler != null) {
+					LegacySvc.request(handler);
+				}
+			}
+		});
+	}
+
+	@Override
+	public Object connectionKey() {
+		return mc().getNetworkHandler();
+	}
+
+	@Override
+	public void sendChat(String text) {
+		if (mc().player != null && text != null && !text.isEmpty()) {
+			mc().player.sendChatMessage(text);
+		}
+	}
+
+	@Override
+	public void mentionSound() {
+		//#if MC >= 1.9
+		mc().getSoundManager().play(PositionedSoundInstance.method_12521(net.minecraft.sound.Sounds.ENTITY_EXPERIENCE_ORB_PICKUP, MENTION_PITCH));
+		//#else
+		mc().getSoundManager().play(PositionedSoundInstance.master(new Identifier("random.orb"), MENTION_PITCH));
+		//#endif
+	}
+
+	@Override
+	public float[] health() {
+		ClientPlayerEntity p = mc().player;
+		return p == null ? null : new float[] {p.getHealth(), p.getMaxHealth()};
+	}
+
+	@Override
+	public String heldItemName(boolean offHand) {
+		ClientPlayerEntity p = mc().player;
+		if (p == null) {
+			return null;
+		}
+		ItemStack stack;
+		//#if MC >= 1.9
+		stack = offHand ? p.getOffHandStack() : p.inventory.getMainHandStack();
+		//#else
+		stack = offHand ? null : p.inventory.getMainHandStack();
+		//#endif
+		if (!present(stack)) {
+			return null;
+		}
+		Identifier id = (Identifier) net.minecraft.item.Item.REGISTRY.getIdentifier(stack.getItem());
+		return id == null ? null : id.getPath();
+	}
+
+	@Override
+	public boolean swordBlocks() {
+		//#if MC >= 1.9
+		return false;
+		//#else
+		return true;
+		//#endif
+	}
+
+	@Override
+	public boolean disableOtherZoom() {
+		boolean changed = false;
+		for (net.minecraft.client.option.KeyBinding key : mc().options.allKeys) {
+			if ("of.key.zoom".equals(key.getTranslationKey()) && key.getCode() != 0) {
+				key.setCode(0);
+				changed = true;
+			}
+		}
+		if (changed) {
+			net.minecraft.client.option.KeyBinding.updateKeysByCode();
+		}
+		return changed;
+	}
+
+	/** The entities whose name this put on (so it can take it off). */
+	private final java.util.Set<Integer> tntNamed = new java.util.HashSet<Integer>();
+
+	@Override
+	public void tntLabels(boolean on) {
+		if (mc().world == null) {
+			tntNamed.clear();
+			return;
+		}
+		if (!on && tntNamed.isEmpty()) {
+			return;
+		}
+		for (Entity e : new ArrayList<Entity>(mc().world.loadedEntities)) {
+			if (!(e instanceof net.minecraft.entity.TntEntity)) {
+				continue;
+			}
+			if (on) {
+				int fuse;
+				//#if MC >= 1.9
+				fuse = ((net.minecraft.entity.TntEntity) e).getFuse();
+				//#else
+				fuse = ((net.minecraft.entity.TntEntity) e).fuseTimer;
+				//#endif
+				e.setCustomName((fuse <= 20 ? "\u00a7c" : "\u00a7e") + (Math.round(fuse / 2.0) / 10.0) + "s");
+				e.setCustomNameVisible(true);
+				tntNamed.add(e.getEntityId());
+			} else if (tntNamed.contains(e.getEntityId())) {
+				e.setCustomName("");
+				e.setCustomNameVisible(false);
+			}
+		}
+		if (!on) {
+			tntNamed.clear();
+		}
+	}
+
+	@Override
+	public boolean canPeekShulkers() {
+		//#if MC >= 1.11
+		return true;
+		//#else
+		return false;
+		//#endif
+	}
+
+	//#if MC >= 1.11
+	@Override
+	public Object[] peek(Object stackObject) {
+		ItemStack stack = (ItemStack) stackObject;
+		if (!present(stack) || !stack.hasNbt()) {
+			return null;
+		}
+		Identifier id = (Identifier) net.minecraft.item.Item.REGISTRY.getIdentifier(stack.getItem());
+		if (id == null) {
+			return null;
+		}
+		int size = com.arcticlauncher.client.feature.ContainerPeek.slotsFor(id.getPath());
+		net.minecraft.nbt.NbtCompound tag = stack.getNbt().getCompound("BlockEntityTag");
+		if (!tag.contains("Items", 9)) {
+			return null;
+		}
+		net.minecraft.nbt.NbtList list = tag.getList("Items", 10);
+		Object[] out = new Object[size];
+		boolean any = false;
+		for (int i = 0; i < list.size(); i++) {
+			net.minecraft.nbt.NbtCompound entry = list.getCompound(i);
+			int slot = entry.getByte("Slot") & 255;
+			ItemStack item = new ItemStack(entry);
+			if (slot < out.length && present(item)) {
+				out[slot] = item;
+				any = true;
+			}
+		}
+		return any ? out : null;
+	}
+
+	@Override
+	public int peekTint(Object stackObject) {
+		ItemStack stack = (ItemStack) stackObject;
+		if (!present(stack)) {
+			return 0;
+		}
+		Identifier id = (Identifier) net.minecraft.item.Item.REGISTRY.getIdentifier(stack.getItem());
+		return id == null ? 0 : com.arcticlauncher.client.feature.ContainerPeek.tintFor(id.getPath());
+	}
+	//#endif
+
+	@Override
+	public float fallDistance() {
+		ClientPlayerEntity p = mc().player;
+		return p == null ? 0 : p.fallDistance;
+	}
+
+	@Override
+	public boolean noScreen() {
+		return mc().currentScreen == null;
+	}
+
+	@Override
+	public boolean lastTargetDead() {
+		Entity e = lastAttacked;
+		return e instanceof net.minecraft.entity.LivingEntity && !e.isAlive();
+	}
+
+	@Override
+	public void playSound(int kind, float volume) {
+		//#if MC >= 1.9
+		net.minecraft.sound.Sound sound = kind == 1 ? net.minecraft.sound.Sounds.ENTITY_ARROW_HIT_PLAYER
+				: kind == 3 ? net.minecraft.sound.Sounds.ENTITY_PLAYER_LEVELUP : net.minecraft.sound.Sounds.ENTITY_EXPERIENCE_ORB_PICKUP;
+		mc().getSoundManager().play(PositionedSoundInstance.method_12521(sound, 1f));
+		//#else
+		String id = kind == 1 ? "random.successful_hit" : kind == 3 ? "random.levelup" : "random.orb";
+		mc().getSoundManager().play(PositionedSoundInstance.master(new Identifier(id), 1f));
+		//#endif
+	}
+
+	// ---- Menus ------------------------------------------------------------------------
+
+	@Override
+	public void proxyChanged(com.arcticlauncher.client.config.ProxyConfig proxy) {
+		com.arcticlauncher.client.net.ProxyRoutes.set(proxy);
+	}
+
+	@Override
+	public void runOnGameThread(Runnable r) {
+		LegacyHooks.onNextFrame(r);
+	}
+
+	@Override
+	public boolean controlDown() {
+		return Screen.hasControlDown();
+	}
+
+	@Override
+	public boolean shiftDown() {
+		return Screen.hasShiftDown();
+	}
+
+	@Override
+	public void setClipboard(String text) {
+		Screen.setClipboard(text);
+	}
+
+	@Override
+	public String clipboard() {
+		String clip = Screen.getClipboard();
+		return clip == null ? "" : clip;
+	}
+
+	@Override
+	public void openPage(Page page) {
+		if (page instanceof com.arcticlauncher.client.menu.TitleMenu) {
+			mc().setScreen(new TitleScreen()); return;
+		}
+		// One Arctic page replaces another, so Escape goes back to what was
+		// under the menu instead of through every page visited.
+		Screen current = mc().currentScreen;
+		Screen under = current instanceof LegacyPageScreen ? ((LegacyPageScreen) current).parent() : current;
+		mc().setScreen(new LegacyPageScreen(page, under));
+	}
+
+	@Override
+	public void openPageOver(Page page) {
+		mc().setScreen(new LegacyPageScreen(page, mc().currentScreen));
+	}
+
+	@Override
+	public void closePage() {
+		if (mc().currentScreen instanceof LegacyPageScreen) {
+			((LegacyPageScreen) mc().currentScreen).close();
+		}
+	}
+
+	@Override
+	public void action(MenuAction action) {
+		MinecraftClient mc = mc();
+		Screen parent = mc.currentScreen;
+		switch (action) {
+			case SINGLEPLAYER:
+				mc.setScreen(new SelectWorldScreen(parent));
+				break;
+			case MULTIPLAYER:
+			case REALMS:
+				mc.setScreen(new MultiplayerScreen(parent));
+				break;
+			case OPTIONS:
+			case ACCESSIBILITY:
+				mc.setScreen(new SettingsScreen(parent, mc.options));
+				break;
+			case LANGUAGE:
+				mc.setScreen(new LanguageOptionsScreen(parent, mc.options, mc.getLanguageManager()));
+				break;
+			default:
+				mc.scheduleStop();
+				break;
+		}
+	}
+
+	@Override
+	public double[] camera() {
+		return LegacyHooks.camera();
+	}
+
+	// ---- Duels --------------------------------------------------------------------------
+
+	private static final String DUEL_PREFIX = "RICO Duel ";
+
+	@Override
+	public boolean canDuel() {
+		return true;
+	}
+
+	@Override
+	public boolean oldCommands() {
+		return true;
+	}
+
+	/** A flat survival world with commands on (one at a time: earlier duel arenas are thrown away). */
+	@Override
+	public void createDuelWorld() {
+		LegacyHooks.onNextFrame(() -> {
+			MinecraftClient mc = mc();
+			leave(mc);
+			LegacyWorldTest.deleteWorlds(new File(mc.runDirectory, "saves"), DUEL_PREFIX);
+			String name = DUEL_PREFIX + com.arcticlauncher.client.LocalClock.formatter("MM-dd HH.mm").format(new java.util.Date());
+			//#if MC >= 1.10
+			net.minecraft.world.level.LevelInfo info = new net.minecraft.world.level.LevelInfo(System.currentTimeMillis(),
+					net.minecraft.world.GameMode.SURVIVAL, false, false, net.minecraft.world.level.LevelGeneratorType.FLAT)
+			//#else
+			net.minecraft.world.level.LevelInfo info = new net.minecraft.world.level.LevelInfo(System.currentTimeMillis(),
+					net.minecraft.world.level.LevelInfo.GameMode.SURVIVAL, false, false, net.minecraft.world.level.LevelGeneratorType.FLAT)
+			//#endif
+					.enableCommands();
+			mc.startIntegratedServer(name, name, info);
+		});
+	}
+
+	@Override
+	public boolean inSingleplayerWorld() {
+		MinecraftClient mc = mc();
+		return mc.world != null && mc.player != null && mc.getServer() != null;
+	}
+
+	@Override
+	public boolean openToLan() {
+		return openToLan(true);
+	}
+
+	@Override
+	public boolean openToLanPlain() {
+		return openToLan(false);
+	}
+
+	@Override
+	public boolean openToLanDone() {
+		net.minecraft.server.integrated.IntegratedServer server = mc().getServer();
+		return server != null && server.isPublished();
+	}
+
+	private boolean openToLan(boolean cheats) {
+		net.minecraft.server.integrated.IntegratedServer server = mc().getServer();
+		if (server == null) {
+			return false;
+		}
+		if (server.isPublished()) {
+			return true;
+		}
+		//#if MC >= 1.10
+		return server.openToLAN(net.minecraft.world.GameMode.SURVIVAL, cheats) != null;
+		//#else
+		return server.getPort(net.minecraft.world.level.LevelInfo.GameMode.SURVIVAL, cheats) != null;
+		//#endif
+	}
+
+	@Override
+	public void leaveWorld() {
+		MinecraftClient mc = mc();
+		leave(mc);
+		mc.setScreen(new TitleScreen());
+	}
+
+	/** How long to wait at most for a singleplayer server to stop after quitting it. */
+	private static final long SERVER_STOP_WAIT_MS = 10_000;
+
+	/**
+	 * Quit the world. A singleplayer server stops by itself once you quit it;
+	 * {@code connect(null)} asks it to stop too and waits for a task it hands
+	 * the server, which never runs once the server is already shutting down. So
+	 * wait for the server to finish stopping first (it then runs that task at once).
+	 */
+	public static void leave(MinecraftClient mc) {
+		if (mc.world == null) {
+			return;
+		}
+		net.minecraft.server.integrated.IntegratedServer server = mc.getServer();
+		mc.world.disconnect();
+		if (server != null) {
+			long deadline = System.currentTimeMillis() + SERVER_STOP_WAIT_MS;
+			while (!server.isStopped() && System.currentTimeMillis() < deadline) {
+				try {
+					Thread.sleep(10);
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					break;
+				}
+			}
+		}
+		mc.connect(null);
+	}
+
+	@Override
+	public boolean connectTo(String address) {
+		return joinSaved(address, address, null);
+	}
+
+	@Override
+	public int protocol() {
+		return com.arcticlauncher.legacy.replay.LegacyReplayCodec.protocolVersion();
+	}
+
+	@Override
+	public boolean joinSaved(String name, String address, Boolean acceptPacks) {
+		com.arcticlauncher.client.servers.DisconnectedPage.joining(address);
+		MinecraftClient mc = mc();
+		LegacyHooks.onNextFrame(() -> {
+			leave(mc);
+			ServerInfo server = new ServerInfo(name, address, false);
+			// The choice made for this server's resource packs (asked again when none was).
+			if (acceptPacks != null) {
+				server.setResourcePackState(acceptPacks ? ServerInfo.ResourcePackState.ENABLED : ServerInfo.ResourcePackState.DISABLED);
+			}
+			mc.setScreen(new ConnectScreen(new MultiplayerScreen(new TitleScreen()), mc, server));
+		});
+		return true;
+	}
+
+	// ---- Account and looks ---------------------------------------------------------------
+
+	@Override
+	public UUID playerId() {
+		return mc().getSession().getProfile().getId();
+	}
+
+	@Override
+	public String playerName() {
+		return mc().getSession().getUsername();
+	}
+
+	/**
+	 * Play as another account without restarting: on these versions the session is all there is per
+	 * account (server joins read its token, the profile comes from it); the old account's profile
+	 * properties (its skin) are dropped.
+	 */
+	@Override
+	public String switchAccount(String name, UUID uuid, String accessToken, String xuid, boolean microsoft) {
+		MinecraftClient mc = mc();
+		if (mc.world != null) {
+			return "leave the world first";
+		}
+		String undashed = uuid.toString().replace("-", "");
+		((com.arcticlauncher.legacy.mixin.MinecraftClientAccountAccess) mc).arctic$setSession(
+				new net.minecraft.client.util.Session(name, undashed, accessToken, microsoft ? "mojang" : "legacy"));
+		mc.getSessionProperties().clear();
+		ArcticLegacy.LOG.info("Now playing as {}", name);
+		return null;
+	}
+
+	@Override
+	public String translate(String key, String english) {
+		String text = net.minecraft.client.resource.language.I18n.translate(key);
+		// Unknown keys come back as themselves.
+		return text == null || text.equals(key) ? english : text;
+	}
+
+	@Override
+	public void joinServer(String serverId) throws Exception {
+		mc().getSessionService().joinServer(mc().getSession().getProfile(), mc().getSession().getAccessToken(), serverId);
+	}
+
+	@Override
+	public void registerTexture(String hash, byte[] png, boolean cape) {
+		BufferedImage image = LegacyTextures.decode(png);
+		if (image == null) {
+			return;
+		}
+		int frames = cape ? Looks.capeFrames(image.getWidth(), image.getHeight()) : 1;
+		com.arcticlauncher.client.gfx.RenderWork.post(() -> {
+			if (frames < 2) {
+				if (LegacyTextures.register(LegacyTextures.look(hash), image)) {
+					ArcticClient.looks().textureReady(hash, 1);
+				}
+				return;
+			}
+			int h = image.getHeight() / frames;
+			boolean ok = true;
+			for (int f = 0; f < frames; f++) {
+				ok &= LegacyTextures.register(LegacyTextures.look(hash + "/" + f), image.getSubimage(0, f * h, image.getWidth(), h));
+			}
+			if (ok) {
+				ArcticClient.looks().textureReady(hash, frames);
+			}
+		});
+	}
+
+	@Override
+	public void registerCosmetic(String id, com.arcticlauncher.client.looks.Geometry geometry, byte[] png, byte[] glowPng) {
+		com.arcticlauncher.client.looks.Cosmetics.Item item = ArcticClient.looks().cosmetics().item(id);
+		LegacyCosmetics.register(id, geometry, item == null ? null : item.idle, png, glowPng);
+	}
+
+	@Override
+	public void registerMesh(String id, com.arcticlauncher.client.looks.MeshModel mesh) {
+		LegacyCosmetics.register(id, mesh);
+	}
+
+	@Override
+	public double fovDegrees() {
+		return net.minecraft.client.MinecraftClient.getInstance().options.fov;
+	}
+
+	@Override
+	public boolean smoothCamera() {
+		return net.minecraft.client.MinecraftClient.getInstance().options.smoothCameraEnabled;
+	}
+
+	@Override
+	public void smoothCamera(boolean on) {
+		net.minecraft.client.MinecraftClient.getInstance().options.smoothCameraEnabled = on;
+	}
+}

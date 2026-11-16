@@ -1,0 +1,1594 @@
+package com.arcticlauncher.mod;
+
+import com.arcticlauncher.client.ArcticClient;
+import com.arcticlauncher.client.GameKey;
+import com.arcticlauncher.client.MenuAction;
+import com.arcticlauncher.client.Platform;
+import com.arcticlauncher.client.looks.Looks;
+import com.arcticlauncher.client.ui.Page;
+import com.mojang.blaze3d.platform.NativeImage;
+//#if MC >= 1.16
+import com.mojang.realmsclient.RealmsMainScreen;
+//#endif
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Options;
+import net.minecraft.client.User;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
+//#if MC >= 1.15
+import net.minecraft.client.gui.screens.multiplayer.SafetyScreen;
+//#endif
+//#if MC >= 1.21
+import net.minecraft.client.gui.screens.options.AccessibilityOptionsScreen;
+import net.minecraft.client.gui.screens.options.LanguageSelectScreen;
+import net.minecraft.client.gui.screens.options.OptionsScreen;
+//#else
+//#if MC >= 1.14
+import net.minecraft.client.gui.screens.AccessibilityOptionsScreen;
+//#endif
+import net.minecraft.client.gui.screens.LanguageSelectScreen;
+import net.minecraft.client.gui.screens.OptionsScreen;
+//#endif
+import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+
+/** {@link Platform} for Minecraft 26.3. */
+final class FabricPlatform implements Platform {
+	private static Minecraft mc() {
+		return Minecraft.getInstance();
+	}
+
+	@Override
+	public String minecraftVersion() {
+		return FabricLoader.getInstance()
+				.getModContainer("minecraft")
+				.map(c -> c.getMetadata().getVersion().getFriendlyString())
+				.orElse("26.3");
+	}
+
+	@Override
+	public File configDir() {
+		return FabricLoader.getInstance().getConfigDir().toFile();
+	}
+
+	@Override
+	public String translate(String key, String english) {
+		//#if MC >= 1.16
+		net.minecraft.locale.Language language = net.minecraft.locale.Language.getInstance();
+		return language.has(key) ? language.getOrDefault(key) : english;
+		//#else
+		return net.minecraft.client.resources.language.I18n.exists(key) ? net.minecraft.client.resources.language.I18n.get(key) : english;
+		//#endif
+	}
+
+	@Override
+	public void log(boolean warning, String message) {
+		if (warning) {
+			ArcticMod.LOG.warn(message);
+		} else {
+			ArcticMod.LOG.info(message);
+		}
+	}
+
+	@Override
+	public int fps() {
+		return Compat.fps();
+	}
+
+	@Override
+	public int ping() {
+		Minecraft mc = mc();
+		ClientPacketListener connection = mc.getConnection();
+		if (connection == null || mc.player == null || mc.hasSingleplayerServer()) {
+			return -1;
+		}
+		PlayerInfo info = connection.getPlayerInfo(mc.player.getUUID());
+		return info == null ? -1 : info.getLatency();
+	}
+
+	@Override
+	public int ping(java.util.UUID player) {
+		Minecraft mc = mc();
+		ClientPacketListener connection = mc.getConnection();
+		if (connection == null || mc.hasSingleplayerServer()) {
+			return -1;
+		}
+		PlayerInfo info = connection.getPlayerInfo(player);
+		return info == null ? -1 : info.getLatency();
+	}
+
+	@Override
+	public boolean inWorld() {
+		return mc().level != null && mc().player != null;
+	}
+
+	@Override
+	public boolean windowFocused() {
+		//#if MC >= 1.14
+		return mc().isWindowActive();
+		//#else
+		return org.lwjgl.glfw.GLFW.glfwGetWindowAttrib(Compat.windowHandle(), org.lwjgl.glfw.GLFW.GLFW_FOCUSED) == org.lwjgl.glfw.GLFW.GLFW_TRUE;
+		//#endif
+	}
+
+	@Override
+	public boolean atTitleScreen() {
+		// The title exists underneath the initial asynchronous resource reload. Opening a
+		// launcher replay there can render a world before entity renderers are installed.
+		//#if MC >= 26.2
+		if (mc().gui.overlay() != null) return false;
+		//#elif MC >= 1.14
+		if (mc().getOverlay() != null) return false;
+		//#endif
+		// Older versions load their initial resources synchronously.
+		Screen screen = Compat.screen();
+		return !inWorld() && (screen instanceof net.minecraft.client.gui.screens.TitleScreen || (screen instanceof PageScreen
+				&& ((PageScreen) screen).page() instanceof com.arcticlauncher.client.menu.TitleMenu));
+	}
+
+	@Override
+	public double[] position() {
+		LocalPlayer p = mc().player;
+		if (p == null) {
+			return null;
+		}
+		return new double[] {Compat.x(p), Compat.y(p), Compat.z(p), Compat.yRot(p), Compat.xRot(p)};
+	}
+
+	@Override
+	public boolean keyDown(GameKey key) {
+		return mapping(mc().options, key).isDown();
+	}
+
+	private static KeyMapping mapping(Options o, GameKey key) {
+		switch (key) {
+			case FORWARD:
+				return o.keyUp;
+			case BACK:
+				return o.keyDown;
+			case LEFT:
+				return o.keyLeft;
+			case RIGHT:
+				return o.keyRight;
+			case JUMP:
+				return o.keyJump;
+			case SNEAK:
+				return o.keyShift;
+			case SPRINT:
+				return o.keySprint;
+			case ATTACK:
+				return o.keyAttack;
+			case INVENTORY:
+				return o.keyInventory;
+			case DROP:
+				return o.keyDrop;
+			case SWAP_HANDS:
+				//#if MC >= 1.16
+				return o.keySwapOffhand;
+				//#else
+				return o.keySwapHands;
+				//#endif
+			case PERSPECTIVE:
+				return o.keyTogglePerspective;
+			case CHAT:
+				return o.keyChat;
+			case PLAYER_LIST:
+				return o.keyPlayerList;
+			default:
+				return o.keyUse;
+		}
+	}
+
+	@Override
+	public boolean readGamepad(com.arcticlauncher.client.controller.Gamepad pad) {
+		return Gamepads.read(pad);
+	}
+
+	@Override
+	public void turnPlayer(double yaw, double pitch) {
+		LocalPlayer p = mc().player;
+		if (p != null) {
+			// Entity.turn takes mouse movement: 0.15 degrees each.
+			p.turn(yaw / 0.15, pitch / 0.15);
+		}
+	}
+
+	@Override
+	public void tapKey(GameKey key) {
+		com.mojang.blaze3d.platform.InputConstants.Key k = com.mojang.blaze3d.platform.InputConstants.getKey(mapping(mc().options, key).saveString());
+		if (k.getValue() >= 0) {
+			KeyMapping.click(k);
+		}
+	}
+
+	@Override
+	public void scrollHotbar(int step) {
+		LocalPlayer p = mc().player;
+		if (p != null) {
+			com.arcticlauncher.client.config.ClientConfig c = ArcticClient.config();
+			boolean wrap = c == null || !c.hotbarScrollStop;
+			Compat.selectSlot(p, com.arcticlauncher.client.feature.HotbarScroll.move(Compat.selectedSlot(p), step, wrap));
+		}
+	}
+
+	@Override
+	public void back() {
+		net.minecraft.client.gui.screens.Screen screen = Compat.screen();
+		//#if MC >= 1.14
+		if (screen == null) {
+			mc().pauseGame(false);
+		} else if (screen.shouldCloseOnEsc()) {
+			screen.onClose();
+		}
+		//#else
+		if (screen == null) {
+			Compat.setScreen(new net.minecraft.client.gui.screens.PauseScreen());
+		} else if (screen instanceof PageScreen) {
+			((PageScreen) screen).onClose();
+		} else if (screen.shouldCloseOnEsc()) {
+			Compat.setScreen(null);
+		}
+		//#endif
+	}
+
+	@Override
+	public double[] cursor() {
+		com.mojang.blaze3d.platform.Window w = mc().getWindow();
+		return new double[] {mc().mouseHandler.xpos(), mc().mouseHandler.ypos(), w.getScreenWidth(), w.getScreenHeight()};
+	}
+
+	@Override
+	public void setCursor(double x, double y) {
+		//#if MC >= 26.3
+		org.lwjgl.sdl.SDLMouse.SDL_WarpMouseInWindow(Compat.windowHandle(), (float) x, (float) y);
+		//#else
+		long window = Compat.windowHandle();
+		org.lwjgl.glfw.GLFW.glfwSetCursorPos(window, x, y);
+		// GLFW doesn't report a move it made itself: tell the game.
+		((com.arcticlauncher.mod.mixin.MouseHandlerInvoker) mc().mouseHandler).arctic$move(window, x, y);
+		//#endif
+	}
+
+	@Override
+	public void mouseButton(int button, boolean down) {
+		com.arcticlauncher.mod.mixin.MouseHandlerInvoker mouse = (com.arcticlauncher.mod.mixin.MouseHandlerInvoker) mc().mouseHandler;
+		int action = down ? com.arcticlauncher.mod.compat.KeyCodes.PRESS : com.arcticlauncher.mod.compat.KeyCodes.RELEASE;
+		// The game's own numbers (SDL's on 26.3: left is 1).
+		int which = button == 0 ? com.arcticlauncher.mod.compat.KeyCodes.MOUSE_LEFT : com.arcticlauncher.mod.compat.KeyCodes.MOUSE_RIGHT;
+		//#if MC >= 1.21.9
+		mouse.arctic$button(Compat.windowHandle(), new net.minecraft.client.input.MouseButtonInfo(which, 0), action);
+		//#else
+		mouse.arctic$press(Compat.windowHandle(), which, action, 0);
+		//#endif
+	}
+
+	@Override
+	public void scrollScreen(double amount) {
+		((com.arcticlauncher.mod.mixin.MouseHandlerInvoker) mc().mouseHandler).arctic$scroll(Compat.windowHandle(), 0, amount);
+	}
+
+	@Override
+	public String biome() {
+		Minecraft mc = mc();
+		if (mc.level == null || mc.player == null) {
+			return null;
+		}
+		String id = Compat.biomeId(mc.level, Compat.blockPos(mc.player));
+		return id == null ? null : title(id);
+	}
+
+	/** "snowy_plains" → "Snowy Plains". */
+	private static String title(String id) {
+		StringBuilder out = new StringBuilder();
+		for (String word : id.split("_")) {
+			if (!word.isEmpty()) {
+				out.append(out.length() == 0 ? "" : " ").append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+			}
+		}
+		return out.toString();
+	}
+
+	@Override
+	public String connectingServer() {
+		Minecraft mc = mc();
+		return mc.hasSingleplayerServer() || mc.getCurrentServer() == null ? null : mc.getCurrentServer().ip;
+	}
+
+	@Override
+	public String server() {
+		Minecraft mc = mc();
+		if (mc.level == null) {
+			return null;
+		}
+		if (mc.hasSingleplayerServer() || mc.getCurrentServer() == null) {
+			return "Singleplayer";
+		}
+		return mc.getCurrentServer().ip;
+	}
+
+	@Override
+	public long dayTime() {
+		return mc().level == null ? -1 : Compat.dayTime(mc().level);
+	}
+
+	@Override
+	public boolean isKeyDown(String key) {
+		return Compat.keyDown(key);
+	}
+
+	@Override
+	public String keyLabel(String key) {
+		return Compat.keyLabel(key);
+	}
+
+	@Override
+	public String keyName(int nativeKey) {
+		return Compat.keyName(nativeKey);
+	}
+
+	/** The camera before Freelook switched to third person (-1: none). */
+	private int before = -1;
+
+	@Override
+	public void setThirdPerson(boolean on) {
+		if (on) {
+			before = Compat.camera();
+			Compat.setCamera(1);
+		} else if (before >= 0) {
+			Compat.setCamera(before);
+			before = -1;
+		}
+	}
+
+	@Override
+	public boolean hasFeatures() {
+		return Compat.FEATURES;
+	}
+
+	@Override
+	public boolean freelookWorks() {
+		// 1.13 sets the view up in GameRenderer/Camera code without the hooks Freelook needs.
+		//#if MC >= 1.14
+		return true;
+		//#else
+		return false;
+		//#endif
+	}
+
+	@Override
+	public boolean smoothFont() {
+		//#if MC >= 26.1
+		return ArcticPacks.smoothFontOn();
+		//#else
+		return SmoothFont.on();
+		//#endif
+	}
+
+	@Override
+	public void reloadFonts() {
+		//#if MC >= 26.1
+		ArcticPacks.reloadFonts();
+		//#else
+		SmoothFont.changed();
+		//#endif
+	}
+
+	@Override
+	public void setSmoothFont(boolean on) {
+		//#if MC >= 26.1
+		ArcticPacks.setSmoothFont(on);
+		//#else
+		SmoothFont.changed();
+		//#endif
+	}
+
+	@Override
+	public boolean physicalKeyDown(GameKey key) {
+		return Compat.keyDown(mapping(mc().options, key).saveString());
+	}
+
+	@Override
+	public void setKeyDown(GameKey key, boolean down) {
+		Compat.setDown(mapping(mc().options, key), down);
+	}
+
+	@Override
+	public boolean keyHeld(GameKey key) {
+		return mapping(mc().options, key).isDown();
+	}
+
+	@Override
+	public int hurtTime() {
+		return GameInfo.hurtTime();
+	}
+
+	@Override
+	public List<Object[]> armor() {
+		return GameInfo.armor();
+	}
+
+	@Override
+	public List<Object[]> effects() {
+		return GameInfo.effects();
+	}
+
+	@Override
+	public Object[] heldItem() {
+		return GameInfo.heldItem();
+	}
+
+	@Override
+	public List<Object[]> carried() {
+		return GameInfo.carried();
+	}
+
+	@Override
+	public int[] sortSlots() {
+		return ContainerSort.slots();
+	}
+
+	@Override
+	public Object[] slotInfo(int slot) {
+		return ContainerSort.info(slot);
+	}
+
+	@Override
+	public void slotClick(int slot) {
+		ContainerSort.click(slot);
+	}
+
+	@Override
+	public boolean sortScreenOpen() {
+		return ContainerSort.screenOpen();
+	}
+
+	@Override
+	public boolean cursorHolds() {
+		return ContainerSort.cursorHolds();
+	}
+
+	@Override
+	public void registerCosmetic(String id, com.arcticlauncher.client.looks.Geometry geometry, byte[] png, byte[] glowPng) {
+		NativeImage image;
+		NativeImage glowImage = null;
+		try {
+			image = NativeImage.read(new java.io.ByteArrayInputStream(png));
+			if (glowPng != null) {
+				glowImage = NativeImage.read(new java.io.ByteArrayInputStream(glowPng));
+			}
+		} catch (Exception e) {
+			ArcticMod.LOG.debug("cosmetic {}: {}", id, e.toString());
+			return;
+		}
+		com.arcticlauncher.client.looks.Cosmetics.Item item = ArcticClient.looks().cosmetics().item(id);
+		NativeImage glowFinal = glowImage;
+		com.arcticlauncher.client.gfx.RenderWork.post(() -> {
+			try {
+				net.minecraft.resources.Identifier texture = GfxImpl.look("cosmetic/" + id);
+				mc().getTextureManager().register(texture, Compat.texture("RICO cosmetic " + id, image));
+				net.minecraft.resources.Identifier glow = null;
+				if (glowFinal != null) {
+					glow = GfxImpl.look("cosmetic/" + id + "_glow");
+					mc().getTextureManager().register(glow, Compat.texture("RICO cosmetic glow " + id, glowFinal));
+				}
+				com.arcticlauncher.mod.cosmetic.CosmeticModels.bake(id, geometry, item == null ? null : item.idle, texture, glow);
+				ArcticClient.looks().cosmetics().ready(id);
+			} catch (Exception e) {
+				ArcticMod.LOG.warn("cosmetic {}: {}", id, e.toString());
+			}
+		});
+	}
+
+	/** The texel the vertex-colored parts of meshes are drawn with. */
+	private static boolean whiteRegistered;
+
+	@Override
+	public void registerMesh(String id, com.arcticlauncher.client.looks.MeshModel mesh) {
+		List<NativeImage> images = new ArrayList<>();
+		try {
+			for (byte[] png : mesh.images) {
+				images.add(NativeImage.read(new java.io.ByteArrayInputStream(png)));
+			}
+		} catch (Exception e) {
+			for (NativeImage image : images) {
+				image.close();
+			}
+			ArcticMod.LOG.warn("cosmetic {} (mesh): {}", id, e.toString());
+			return;
+		}
+		com.arcticlauncher.client.gfx.RenderWork.post(() -> {
+			try {
+				net.minecraft.resources.Identifier[] textures = new net.minecraft.resources.Identifier[images.size()];
+				for (int i = 0; i < textures.length; i++) {
+					String key = "mesh/" + id + "_" + i;
+					if (!register(key, images.get(i))) {
+						return;
+					}
+					textures[i] = GfxImpl.look(key);
+				}
+				if (!whiteRegistered) {
+					NativeImage white = new NativeImage(2, 2, false);
+					for (int y = 0; y < 2; y++) {
+						for (int x = 0; x < 2; x++) {
+							//#if MC >= 1.21.2
+							white.setPixel(x, y, -1);
+							//#else
+							white.setPixelRGBA(x, y, -1);
+							//#endif
+						}
+					}
+					whiteRegistered = register("mesh/white", white);
+				}
+				com.arcticlauncher.mod.cosmetic.MeshModels.bake(id, mesh, textures, GfxImpl.look("mesh/white"));
+				ArcticClient.looks().cosmetics().ready(id);
+			} catch (Exception e) {
+				ArcticMod.LOG.warn("cosmetic {} (mesh): {}", id, e.toString());
+			}
+		});
+	}
+
+	@Override
+	public void runOnGameThread(Runnable r) {
+		mc().execute(r);
+	}
+
+	@Override
+	public String switchAccount(String name, UUID uuid, String accessToken, String xuid, boolean microsoft) {
+		return AccountSwap.swap(name, uuid, accessToken, xuid, microsoft);
+	}
+
+	@Override
+	public boolean localMoving() {
+		if (mc().player == null) {
+			return false;
+		}
+		//#if MC >= 1.21.2
+		net.minecraft.world.entity.player.Input keys = mc().player.input.keyPresses;
+		return keys.forward() || keys.backward() || keys.left() || keys.right() || keys.jump() || keys.shift();
+		//#else
+		// Before 1.21.2 input was a plain Input with boolean fields, not a ClientInput/record.
+		net.minecraft.client.player.Input keys = mc().player.input;
+		return keys.up || keys.down || keys.left || keys.right || keys.jumping || keys.shiftKeyDown;
+		//#endif
+	}
+
+	@Override
+	public UUID worldPlayerId() {
+		return mc().player == null ? null : mc().player.getUUID();
+	}
+
+	@Override
+	public boolean shiftDown() {
+		//#if MC >= 1.21.9
+		return mc().hasShiftDown();
+		//#else
+		return net.minecraft.client.gui.screens.Screen.hasShiftDown();
+		//#endif
+	}
+
+	@Override
+	public boolean controlDown() {
+		//#if MC >= 1.21.9
+		return mc().hasControlDown();
+		//#else
+		return net.minecraft.client.gui.screens.Screen.hasControlDown();
+		//#endif
+	}
+
+	@Override
+	public void setClipboard(String text) {
+		mc().keyboardHandler.setClipboard(text);
+	}
+
+	@Override
+	public String clipboard() {
+		//#if MC >= 1.14
+		String clip = mc().keyboardHandler.getClipboard();
+		//#else
+		String clip = mc().keyboardHandler.method_18177();
+		//#endif
+		return clip == null ? "" : clip;
+	}
+
+	@Override
+	public void textInput(Object owner, boolean on) {
+		//#if MC >= 26.3
+		if (on) {
+			mc().textInputManager().startTextInput(owner);
+		} else {
+			mc().textInputManager().stopTextInput(owner);
+		}
+		//#elif MC >= 26.1
+		if (on) {
+			mc().textInputManager().startTextInput();
+		} else {
+			mc().textInputManager().stopTextInput();
+		}
+		//#endif
+	}
+
+	@Override
+	public void proxyChanged(com.arcticlauncher.client.config.ProxyConfig proxy) {
+		com.arcticlauncher.client.net.ProxyRoutes.set(proxy);
+	}
+
+	@Override
+	public Object sampleItem(String id) {
+		return GameInfo.sampleItem(id);
+	}
+
+	@Override
+	public Object effectSprite(String id) {
+		return GameInfo.effectSprite(id);
+	}
+
+	@Override
+	public Object[] target() {
+		return GameInfo.target();
+	}
+
+	@Override
+	public boolean hudHidden() {
+		return Compat.hudHidden() || Compat.debugScreenShowing();
+	}
+
+	@Override
+	public void openPage(Page page) {
+		// Keep the native screen lifecycle and all other mods' controls.
+		if (page instanceof com.arcticlauncher.client.menu.TitleMenu) {
+			Compat.setScreen(new net.minecraft.client.gui.screens.TitleScreen());
+			return;
+		}
+		// One Arctic page replaces another, so Escape goes back to what was
+		// under the menu instead of through every page visited.
+		Screen now = Compat.screen();
+		Screen under = now instanceof PageScreen ? ((PageScreen) now).parent() : now;
+		Compat.setScreen(new PageScreen(page, under));
+	}
+
+	@Override
+	public void openPageOver(Page page) {
+		Compat.setScreen(new PageScreen(page, Compat.screen()));
+	}
+
+	@Override
+	public void closePage() {
+		if (Compat.screen() instanceof PageScreen) {
+			((PageScreen) Compat.screen()).onClose();
+		}
+	}
+
+	@Override
+	public void action(MenuAction action) {
+		Minecraft mc = mc();
+		Screen parent = Compat.screen();
+		switch (action) {
+			case SINGLEPLAYER:
+				Compat.setScreen(new SelectWorldScreen(parent));
+				break;
+			case MULTIPLAYER:
+				//#if MC >= 1.15
+				Compat.setScreen(mc.options.skipMultiplayerWarning ? new JoinMultiplayerScreen(parent) : new SafetyScreen(parent));
+				//#else
+				Compat.setScreen(new JoinMultiplayerScreen(parent));
+				//#endif
+				break;
+			case REALMS:
+				//#if MC >= 1.16
+				Compat.setScreen(new RealmsMainScreen(parent));
+				//#else
+				new net.minecraft.realms.RealmsBridge().switchToRealms(parent);
+				//#endif
+				break;
+			case OPTIONS:
+				Compat.setScreen(Compat.optionsScreen(parent));
+				break;
+			case LANGUAGE:
+				Compat.setScreen(new LanguageSelectScreen(parent, mc.options, mc.getLanguageManager()));
+				break;
+			case ACCESSIBILITY:
+				//#if MC >= 1.14
+				Compat.setScreen(new AccessibilityOptionsScreen(parent, mc.options));
+				//#else
+				// 1.13 has no accessibility screen: its settings are among the others.
+				Compat.setScreen(Compat.optionsScreen(parent));
+				//#endif
+				break;
+			case QUIT:
+				mc.stop();
+				break;
+			default:
+				break;
+		}
+	}
+
+	@Override
+	public UUID playerId() {
+		//#if MC >= 1.19
+		return mc().getUser().getProfileId();
+		//#else
+		return mc().getUser().getGameProfile().getId();
+		//#endif
+	}
+
+	@Override
+	public String playerName() {
+		return mc().getUser().getName();
+	}
+
+	@Override
+	public void registerTexture(String hash, byte[] png, boolean cape) {
+		// Looks already checked the hash and the PNG's size; the decode itself
+		// can still fail on damaged data, which just means no texture.
+		NativeImage image;
+		try {
+			image = NativeImage.read(new java.io.ByteArrayInputStream(png));
+		} catch (Exception e) {
+			ArcticMod.LOG.debug("texture {}: {}", hash, e.toString());
+			return;
+		}
+		int frames = cape ? Looks.capeFrames(image.getWidth(), image.getHeight()) : 1;
+		if (frames < 2) {
+			com.arcticlauncher.client.gfx.RenderWork.post(() -> {
+				if (register(hash, image)) {
+					ArcticClient.looks().textureReady(hash, 1);
+				}
+			});
+			return;
+		}
+		List<NativeImage> parts = splitFrames(image, frames);
+		image.close();
+		com.arcticlauncher.client.gfx.RenderWork.post(() -> {
+			boolean ok = true;
+			for (int i = 0; i < parts.size(); i++) {
+				ok &= register(hash + "/" + i, parts.get(i));
+			}
+			if (ok) {
+				ArcticClient.looks().textureReady(hash, parts.size());
+			}
+		});
+	}
+
+	/** Upload on the render thread; a failure is logged, never thrown into the game loop. */
+	private static boolean register(String key, NativeImage image) {
+		try {
+			mc().getTextureManager().register(GfxImpl.look(key), Compat.texture("RICO " + key, image));
+			return true;
+		} catch (Exception e) {
+			image.close();
+			ArcticMod.LOG.warn("texture {}: {}", key, e.toString());
+			return false;
+		}
+	}
+
+	/** An animated cape's stacked 2:1 frames as separate images. */
+	private static List<NativeImage> splitFrames(NativeImage strip, int frames) {
+		int w = strip.getWidth();
+		int h = strip.getHeight() / frames;
+		List<NativeImage> parts = new ArrayList<>();
+		for (int f = 0; f < frames; f++) {
+			NativeImage part = new NativeImage(w, h, true);
+			for (int y = 0; y < h; y++) {
+				for (int x = 0; x < w; x++) {
+					//#if MC >= 1.21.2
+					part.setPixel(x, y, strip.getPixel(x, f * h + y));
+					//#else
+					// Before 1.21.2 NativeImage's pixel accessors were named RGBA.
+					part.setPixelRGBA(x, y, strip.getPixelRGBA(x, f * h + y));
+					//#endif
+				}
+			}
+			parts.add(part);
+		}
+		return parts;
+	}
+
+	@Override
+	public void joinServer(String serverId) throws Exception {
+		Compat.joinServer(serverId);
+	}
+
+	@Override
+	public String aimedName() {
+		Minecraft mc = mc();
+		if (mc.level == null || mc.hitResult == null) {
+			return null;
+		}
+		//#if MC >= 1.14
+		if (mc.hitResult instanceof net.minecraft.world.phys.BlockHitResult) {
+			net.minecraft.core.BlockPos pos = ((net.minecraft.world.phys.BlockHitResult) mc.hitResult).getBlockPos();
+			return mc.level.getBlockState(pos).getBlock().getName().getString();
+		}
+		if (mc.hitResult instanceof net.minecraft.world.phys.EntityHitResult) {
+			return ((net.minecraft.world.phys.EntityHitResult) mc.hitResult).getEntity().getName().getString();
+		}
+		//#else
+		String kind = String.valueOf(mc.hitResult.type);
+		if ("BLOCK".equals(kind)) {
+			return mc.level.getBlockState(mc.hitResult.getBlockPos()).getBlock().getName().getString();
+		}
+		if ("ENTITY".equals(kind)) {
+			return mc.hitResult.entity.getName().getString();
+		}
+		//#endif
+		return null;
+	}
+
+	@Override
+	public int aimKind() {
+		Minecraft mc = mc();
+		//#if MC >= 1.14
+		if (!(mc.hitResult instanceof net.minecraft.world.phys.EntityHitResult)) {
+			return 0;
+		}
+		net.minecraft.world.phys.EntityHitResult hit = (net.minecraft.world.phys.EntityHitResult) mc.hitResult;
+		net.minecraft.world.entity.Entity e = hit.getEntity();
+		//#else
+		// 1.13 has one kind of hit result, with the entity in it.
+		if (mc.hitResult == null || !"ENTITY".equals(String.valueOf(mc.hitResult.type))) {
+			return 0;
+		}
+		net.minecraft.world.entity.Entity e = mc.hitResult.entity;
+		//#endif
+		if (e instanceof net.minecraft.world.entity.player.Player) {
+			return 1;
+		}
+		if (e instanceof net.minecraft.world.entity.monster.Enemy) {
+			return 2;
+		}
+		return e instanceof net.minecraft.world.entity.LivingEntity ? 3 : 0;
+	}
+
+	/** Leaves the current world with no confirmation dialog, whatever this version calls that. */
+	@Override
+	public double[] camera() {
+		Minecraft mc = mc();
+		if (mc.level == null) {
+			return null;
+		}
+		//#if MC < 1.14
+		// 1.13's camera is static state: the view entity, as the frame sees it.
+		net.minecraft.world.entity.Entity view = mc.getCameraEntity();
+		if (view == null) {
+			return null;
+		}
+		float t = mc.getFrameTime();
+		double[] out = {view.xo + (view.x - view.xo) * t, view.yo + (view.y - view.yo) * t + view.getEyeHeight(),
+				view.zo + (view.z - view.zo) * t, view.yRotO + (view.yRot - view.yRotO) * t,
+				view.xRotO + (view.xRot - view.xRotO) * t, 0};
+		//#else
+		//#if MC >= 26.2
+		net.minecraft.client.Camera cam = mc.gameRenderer.mainCamera();
+		//#else
+		net.minecraft.client.Camera cam = mc.gameRenderer.getMainCamera();
+		//#endif
+		//#if MC >= 1.21.11
+		net.minecraft.world.phys.Vec3 at = cam.position();
+		double[] out = {at.x, at.y, at.z, cam.yRot(), cam.xRot(), 0};
+		//#else
+		net.minecraft.world.phys.Vec3 at = cam.getPosition();
+		double[] out = {at.x, at.y, at.z, cam.getYRot(), cam.getXRot(), 0};
+		//#endif
+		//#endif
+		//#if MC >= 26.1
+		out[5] = cam.getFov();
+		//#else
+		out[5] = Compat.worldFov;
+		//#endif
+		return out;
+	}
+
+	@Override
+	public void leaveWorld() {
+		Minecraft mc = mc();
+		leaveWorld(mc);
+		Compat.setScreen(new net.minecraft.client.gui.screens.TitleScreen());
+	}
+
+	private static void leaveWorld(Minecraft mc) {
+		if (mc.level == null) {
+			return;
+		}
+		Compat.quitLevel();
+		//#if MC >= 1.21.9
+		mc.disconnectFromWorld(com.arcticlauncher.mod.Compat.empty());
+		//#elif MC >= 1.21.6
+		mc.disconnectWithSavingScreen();
+		//#elif MC >= 1.20.2
+		mc.disconnect();
+		//#elif MC >= 1.14
+		mc.clearLevel();
+		//#else
+		Compat.clearLevelOld(mc, null);
+		//#endif
+	}
+
+	@Override
+	public boolean connectTo(String address) {
+		return joinSaved(address, address, null);
+	}
+
+	@Override
+	public int protocol() {
+		return com.arcticlauncher.mod.replay.ReplayCodec.protocolVersion();
+	}
+
+	@Override
+	public boolean joinSaved(String name, String address, Boolean acceptPacks) {
+		com.arcticlauncher.client.servers.DisconnectedPage.joining(address);
+		Minecraft mc = mc();
+		mc.execute(() -> {
+			leaveWorld(mc);
+			//#if MC >= 1.20.2
+			net.minecraft.client.multiplayer.ServerData data = new net.minecraft.client.multiplayer.ServerData(
+					name, address, net.minecraft.client.multiplayer.ServerData.Type.OTHER);
+			//#else
+			// Before 1.20.2 ServerData's third argument was a plain "is this a LAN entry" boolean.
+			net.minecraft.client.multiplayer.ServerData data =
+					new net.minecraft.client.multiplayer.ServerData(name, address, false);
+			//#endif
+			// The choice made for this server's resource packs (asked again when none was).
+			if (acceptPacks != null) {
+				data.setResourcePackStatus(acceptPacks ? net.minecraft.client.multiplayer.ServerData.ServerPackStatus.ENABLED
+						: net.minecraft.client.multiplayer.ServerData.ServerPackStatus.DISABLED);
+			}
+			//#if MC < 1.17
+			mc.setScreen(new net.minecraft.client.gui.screens.ConnectScreen(new net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen(new net.minecraft.client.gui.screens.TitleScreen()), mc, data));
+			//#elif MC < 1.20
+			net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen(new net.minecraft.client.gui.screens.TitleScreen()), mc,
+					net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(address), data);
+			//#elif MC >= 1.20.6
+			net.minecraft.client.gui.screens.ConnectScreen.startConnecting(
+					new net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen(new net.minecraft.client.gui.screens.TitleScreen()), mc,
+					net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(address), data, false, null);
+			//#else
+			// Before 1.20.6 startConnecting had no trailing TransferState parameter.
+			net.minecraft.client.gui.screens.ConnectScreen.startConnecting(
+					new net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen(new net.minecraft.client.gui.screens.TitleScreen()), mc,
+					net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(address), data, false);
+			//#endif
+		});
+		return true;
+	}
+
+	@Override
+	public boolean canSimpleVoiceChat() {
+		return com.arcticlauncher.mod.svc.SvcPayload.ENABLED;
+	}
+
+	@Override
+	public void requestSimpleVoiceChat() {
+		Minecraft mc = mc();
+		mc.execute(() -> {
+			ClientPacketListener connection = mc.getConnection();
+			if (connection != null) {
+				for (com.arcticlauncher.mod.svc.SvcPayload p : com.arcticlauncher.mod.svc.SvcPayload.request()) {
+					connection.send(p.toPacket());
+				}
+			}
+		});
+	}
+
+	@Override
+	public java.util.List<Object[]> durability() {
+		return GameInfo.durability();
+	}
+
+	@Override
+	public void mentionSound() {
+		//#if MC >= 1.14
+		mc().getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+				net.minecraft.sounds.SoundEvents.EXPERIENCE_ORB_PICKUP, PING_PITCH, PING_VOLUME));
+		//#else
+		mc().getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+				net.minecraft.sound.Sounds.ENTITY_EXPERIENCE_ORB_PICKUP, PING_PITCH, PING_VOLUME));
+		//#endif
+	}
+
+	@Override
+	public float[] health() {
+		return GameInfo.health();
+	}
+
+	@Override
+	public boolean lastTargetDead() {
+		return GameInfo.lastTargetDead();
+	}
+
+	@Override
+	public void playSound(int kind, float volume) {
+		boolean ding = kind == 1;
+		boolean levelUp = kind == 3;
+		mc().getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(
+				//#if MC >= 1.14
+				ding ? net.minecraft.sounds.SoundEvents.ARROW_HIT_PLAYER
+						: levelUp ? net.minecraft.sounds.SoundEvents.PLAYER_LEVELUP : net.minecraft.sounds.SoundEvents.EXPERIENCE_ORB_PICKUP,
+				//#else
+				ding ? net.minecraft.sound.Sounds.ENTITY_ARROW_HIT_PLAYER
+						: levelUp ? net.minecraft.sound.Sounds.ENTITY_PLAYER_LEVELUP : net.minecraft.sound.Sounds.ENTITY_EXPERIENCE_ORB_PICKUP,
+				//#endif
+				1f, volume));
+	}
+
+	@Override
+	public String heldItemName(boolean offHand) {
+		return WorldStats.heldItemName(offHand);
+	}
+
+	@Override
+	public boolean disableOtherZoom() {
+		//#if MC >= 1.14
+		return OtherZoom.disable(mc());
+		//#else
+		return false;
+		//#endif
+	}
+
+	@Override
+	public void tntLabels(boolean on) {
+		//#if MC >= 1.14
+		TntLabels.update(on);
+		//#endif
+	}
+
+	@Override
+	public boolean canPeekShulkers() {
+		return true;
+	}
+
+	@Override
+	public boolean hasScreenHooks() {
+		//#if MC >= 1.14
+		return true;
+		//#else
+		return false;
+		//#endif
+	}
+
+	@Override
+	public Object[] peek(Object stack) {
+		return WorldStats.peek(stack);
+	}
+
+	@Override
+	public int peekTint(Object stack) {
+		return WorldStats.peekTint(stack);
+	}
+
+	@Override
+	public float fallDistance() {
+		LocalPlayer p = mc().player;
+		return p == null ? 0 : (float) p.fallDistance;
+	}
+
+	@Override
+	public boolean noScreen() {
+		return Compat.screen() == null;
+	}
+
+	private static final float PING_PITCH = 1.6f;
+	private static final float PING_VOLUME = 0.5f;
+
+	@Override
+	public boolean minimapWorks() {
+		return scoreboardTweaks();
+	}
+
+	@Override
+	public boolean movesVanillaParts() {
+		return true;
+	}
+
+	@Override
+	public boolean mapColumns(int x0, int z0, int w, int h, int[] out) {
+		return minimapWorks() && MinimapTexture.columns(x0, z0, w, h, out);
+	}
+
+	@Override
+	public String minimapPixels(int[] argb, int size) {
+		return minimapWorks() ? MinimapTexture.upload(argb, size) : null;
+	}
+
+	@Override
+	public java.io.File resourcePackDir() {
+		return new java.io.File(mc().gameDirectory, "resourcepacks");
+	}
+
+	@Override
+	public void enableResourcePack(String fileName) {
+		WorldStats.enablePack(fileName);
+	}
+
+	@Override
+	public java.util.List<com.arcticlauncher.client.packs.PackInfo> resourcePacks() {
+		return WorldStats.packs(resourcePackDir());
+	}
+
+	@Override
+	public void setResourcePacks(java.util.List<String> enabledTopFirst) {
+		WorldStats.setPacks(enabledTopFirst);
+	}
+
+	@Override
+	public boolean canDuel() {
+		return true;
+	}
+
+	@Override
+	public boolean camelCaseRules() {
+		//#if MC >= 1.21.11
+		return false;
+		//#else
+		return true;
+		//#endif
+	}
+
+	@Override
+	public boolean replaceItemCommand() {
+		//#if MC >= 1.17
+		return false;
+		//#else
+		return true;
+		//#endif
+	}
+
+	@Override
+	public int flatGroundY() {
+		//#if MC >= 1.18
+		return -60;
+		//#else
+		return 4;
+		//#endif
+	}
+
+	@Override
+	public boolean duelArena() {
+		// Before 1.19.4 the world comes from the Create World screen: not flat.
+		//#if MC >= 1.19.4
+		return false;
+		//#else
+		return true;
+		//#endif
+	}
+
+	@Override
+	public void createDuelWorld() {
+		//#if MC >= 1.19.4
+		Minecraft mc = mc();
+		mc.execute(() -> {
+			leaveWorld(mc);
+			// One duel world at a time: earlier ones are thrown away (they're only arenas).
+			WorldStats.deleteWorlds(new java.io.File(mc.gameDirectory, "saves"), "RICO Duel ");
+			String name = "RICO Duel " + com.arcticlauncher.client.LocalClock.formatter("MM-dd HH.mm").format(new java.util.Date());
+			//#if MC >= 26.1
+			net.minecraft.world.level.LevelSettings settings = new net.minecraft.world.level.LevelSettings(name,
+					net.minecraft.world.level.GameType.SURVIVAL,
+					new net.minecraft.world.level.LevelSettings.DifficultySettings(net.minecraft.world.Difficulty.EASY, false, false),
+					true, net.minecraft.world.level.WorldDataConfiguration.DEFAULT);
+			//#elif MC >= 1.21.11
+			// GameRules moved to a gamerules subpackage in 1.21.11.
+			net.minecraft.world.level.LevelSettings settings = new net.minecraft.world.level.LevelSettings(name,
+					net.minecraft.world.level.GameType.SURVIVAL, false, net.minecraft.world.Difficulty.EASY, true,
+					new net.minecraft.world.level.gamerules.GameRules(net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS),
+					net.minecraft.world.level.WorldDataConfiguration.DEFAULT);
+			//#elif MC >= 1.21.3
+			// Before 26.1 LevelSettings took hardcore/difficulty/GameRules directly, with
+			// no DifficultySettings record; since 1.21.3 GameRules also needs a FeatureFlagSet.
+			net.minecraft.world.level.LevelSettings settings = new net.minecraft.world.level.LevelSettings(name,
+					net.minecraft.world.level.GameType.SURVIVAL, false, net.minecraft.world.Difficulty.EASY, true,
+					new net.minecraft.world.level.GameRules(net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS),
+					net.minecraft.world.level.WorldDataConfiguration.DEFAULT);
+			//#else
+			// Before 1.21.3 GameRules had a plain no-argument constructor.
+			net.minecraft.world.level.LevelSettings settings = new net.minecraft.world.level.LevelSettings(name,
+					net.minecraft.world.level.GameType.SURVIVAL, false, net.minecraft.world.Difficulty.EASY, true,
+					new net.minecraft.world.level.GameRules(), net.minecraft.world.level.WorldDataConfiguration.DEFAULT);
+			//#endif
+			//#if MC >= 1.21.3
+			mc.createWorldOpenFlows().createFreshLevel(name, settings, net.minecraft.world.level.levelgen.WorldOptions.defaultWithRandomSeed(),
+					registries -> registries.lookupOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET)
+							.getOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions(),
+					new net.minecraft.client.gui.screens.TitleScreen());
+			//#elif MC >= 1.20.4
+			// Before 1.21.3 the dimensions function took RegistryAccess (registryOrThrow),
+			// not HolderLookup.Provider (lookupOrThrow); createFreshLevel already took a Screen.
+			mc.createWorldOpenFlows().createFreshLevel(name, settings, net.minecraft.world.level.levelgen.WorldOptions.defaultWithRandomSeed(),
+					registries -> registries.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET)
+							.getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions(),
+					new net.minecraft.client.gui.screens.TitleScreen());
+			//#else
+			// 1.20.1's createFreshLevel had no trailing Screen parameter yet.
+			mc.createWorldOpenFlows().createFreshLevel(name, settings, net.minecraft.world.level.levelgen.WorldOptions.defaultWithRandomSeed(),
+					registries -> registries.registryOrThrow(net.minecraft.core.registries.Registries.WORLD_PRESET)
+							.getHolderOrThrow(net.minecraft.world.level.levelgen.presets.WorldPresets.FLAT).value().createWorldDimensions());
+			//#endif
+		});
+		//#else
+		// Before 1.19.4 there's no direct way to make a world: the Create World screen, filled in.
+		Minecraft mc = mc();
+		mc.execute(() -> {
+			leaveWorld(mc);
+			WorldStats.deleteWorlds(new java.io.File(mc.gameDirectory, "saves"), "RICO Duel ");
+			//#if MC >= 1.19
+			net.minecraft.client.gui.screens.worldselection.CreateWorldScreen.openFresh(mc, null);
+			//#elif MC >= 1.18
+			mc.setScreen(net.minecraft.client.gui.screens.worldselection.CreateWorldScreen.createFresh(null));
+			//#elif MC >= 1.16
+			mc.setScreen(net.minecraft.client.gui.screens.worldselection.CreateWorldScreen.create(null));
+			//#else
+			mc.setScreen(new net.minecraft.client.gui.screens.worldselection.CreateWorldScreen(null));
+			//#endif
+			fillCreateWorld(mc, 0);
+		});
+		//#endif
+	}
+
+	//#if MC < 1.19.4
+	/** Name the duel world, cheats on, Create: once the screen is up (1.19 opens it after loading data packs). */
+	private static void fillCreateWorld(Minecraft mc, int attempt) {
+		if (!(Compat.screen() instanceof net.minecraft.client.gui.screens.worldselection.CreateWorldScreen)) {
+			if (attempt < CREATE_WORLD_TRIES) {
+				Thread t = new Thread(() -> {
+					try {
+						Thread.sleep(CREATE_WORLD_WAIT_MS);
+					} catch (InterruptedException e) {
+						return;
+					}
+					mc.execute(() -> fillCreateWorld(mc, attempt + 1));
+				}, "arctic-duel-world");
+				t.setDaemon(true);
+				t.start();
+			}
+			return;
+		}
+		com.arcticlauncher.mod.mixin.CreateWorldScreenAccess screen = (com.arcticlauncher.mod.mixin.CreateWorldScreenAccess) Compat.screen();
+		screen.arctic$nameEdit().setValue("RICO Duel " + com.arcticlauncher.client.LocalClock.formatter("MM-dd HH.mm").format(new java.util.Date()));
+		screen.arctic$setCommands(true);
+		screen.arctic$setCommandsChanged(true);
+		screen.arctic$create();
+	}
+
+	private static final int CREATE_WORLD_TRIES = 50;
+	private static final long CREATE_WORLD_WAIT_MS = 200;
+	//#endif
+
+	@Override
+	public boolean inSingleplayerWorld() {
+		Minecraft mc = mc();
+		return mc.level != null && mc.player != null && mc.getSingleplayerServer() != null;
+	}
+
+	@Override
+	public boolean openToLan() {
+		return openToLan(true);
+	}
+
+	@Override
+	public boolean openToLanPlain() {
+		return openToLan(false);
+	}
+
+	@Override
+	public boolean openToLanDone() {
+		net.minecraft.client.server.IntegratedServer server = mc().getSingleplayerServer();
+		return server != null && server.isPublished();
+	}
+
+	private boolean openToLan(boolean cheats) {
+		net.minecraft.client.server.IntegratedServer server = mc().getSingleplayerServer();
+		if (server == null) {
+			return false;
+		}
+		int port = net.minecraft.util.HttpUtil.getAvailablePort();
+		//#if MC >= 26.3
+		return server.isPublished() || server.publishServer(net.minecraft.server.MinecraftServer.MultiplayerScope.LAN, cheats, port);
+		//#elif MC >= 26.2
+		return server.isPublished() || server.publishServer(net.minecraft.server.MinecraftServer.MultiplayerScope.LAN, port);
+		//#else
+		return server.isPublished() || server.publishServer(net.minecraft.world.level.GameType.SURVIVAL, cheats, port);
+		//#endif
+	}
+
+	@Override
+	public boolean hitColorWorks() {
+		return scoreboardTweaks();
+	}
+
+	@Override
+	public void setHitColor(int rgb) {
+		//#if MC < 1.15
+		// 1.14 sets the tint up with every hurt mob (HitColorOldMixin reads the setting then).
+		//#else
+		Minecraft mc = mc();
+		mc.execute(() -> {
+			net.minecraft.client.renderer.texture.DynamicTexture texture =
+					((com.arcticlauncher.mod.mixin.OverlayTextureAccess) mc.gameRenderer.overlayTexture()).arctic$texture();
+			com.mojang.blaze3d.platform.NativeImage pixels = texture.getPixels();
+			if (pixels == null) {
+				return;
+			}
+			int color = HIT_ALPHA | (rgb == 0 ? HIT_RED : rgb & 0xFFFFFF);
+			// The top half of the 16x16 overlay is the hurt tint.
+			for (int y = 0; y < 8; y++) {
+				for (int x = 0; x < 16; x++) {
+					//#if MC >= 1.21.2
+					pixels.setPixel(x, y, color);
+					//#else
+					// Before 1.21.2 these pixels are ABGR: red and blue swap places.
+					pixels.setPixelRGBA(x, y, (color & 0xFF00FF00) | ((color >> 16) & 0xFF) | ((color & 0xFF) << 16));
+					//#endif
+				}
+			}
+			texture.upload();
+		});
+		//#endif
+	}
+
+	/** The game's hurt tint: red at 70% (0xB2). */
+	private static final int HIT_ALPHA = 0xB2000000;
+	private static final int HIT_RED = 0xFF0000;
+
+	@Override
+	public String worldKey() {
+		return WorldStats.worldKey();
+	}
+
+	@Override
+	public String dimension() {
+		return WorldStats.dimension();
+	}
+
+	@Override
+	public boolean outlineTweaks() {
+		return true;
+	}
+
+	@Override
+	public boolean outlineWidthWorks() {
+		// Before 1.21.11 the outline's line width is the one every line is drawn with.
+		//#if MC >= 1.21.11
+		return true;
+		//#else
+		return false;
+		//#endif
+	}
+
+	@Override
+	public boolean motionBlurWorks() {
+		// 26.1+: a post effect; before: MotionBlurGL, which draws with OpenGL (VulkanMod replaces it).
+		//#if MC >= 26.1
+		return true;
+		//#elif MC >= 1.21.6
+		// Under VulkanMod as a post effect (MotionBlurPostMixin).
+		return true;
+		//#else
+		return !VulkanCompat.ACTIVE;
+		//#endif
+	}
+
+	@Override
+	public boolean glintWorks() {
+		return true;
+	}
+
+	@Override
+	public boolean tooltipScrollWorks() {
+		return true;
+	}
+
+	@Override
+	public boolean dynamicFovWorks() {
+		return true;
+	}
+
+	@Override
+	public boolean fogWorks() {
+		return true;
+	}
+
+	@Override
+	public boolean cooldownsWork() {
+		return true;
+	}
+
+	@Override
+	public float cooldown(String idPart) {
+		return WorldStats.cooldown(idPart);
+	}
+
+	@Override
+	public boolean horseStatsWorks() {
+		return HorseInfo.works();
+	}
+
+	@Override
+	public float[] horseStats() {
+		return HorseInfo.stats();
+	}
+
+	@Override
+	public boolean chunkBordersWorks() {
+		return true;
+	}
+
+	@Override
+	public boolean itemPhysicsWorks() {
+		return true;
+	}
+
+	@Override
+	public boolean scoreboardTweaks() {
+		return true;
+	}
+
+	@Override
+	public int toastsBottom() {
+		//#if MC < 1.19
+		// No slot tracking before 1.19.
+		return 0;
+		//#else
+		//#if MC >= 26.2
+		java.util.BitSet slots = ((com.arcticlauncher.mod.mixin.ToastManagerAccess) mc().gui.toastManager()).arctic$occupiedSlots();
+		//#elif MC >= 1.21.3
+		java.util.BitSet slots = ((com.arcticlauncher.mod.mixin.ToastManagerAccess) mc().getToastManager()).arctic$occupiedSlots();
+		//#else
+		// Before 1.21.3 the toast queue was ToastComponent, reached through getToasts().
+		java.util.BitSet slots = ((com.arcticlauncher.mod.mixin.ToastManagerAccess) mc().getToasts()).arctic$occupiedSlots();
+		//#endif
+		return slots.length() * net.minecraft.client.gui.components.toasts.Toast.SLOT_HEIGHT;
+		//#endif
+	}
+
+	@Override
+	public int[] light() {
+		return WorldStats.light();
+	}
+
+	@Override
+	public int countItems(String idPart) {
+		return WorldStats.countItems(idPart);
+	}
+
+	@Override
+	public java.util.List<Object[]> arrows() {
+		return WorldStats.arrows();
+	}
+
+	@Override
+	public boolean hungerBarShown() {
+		return WorldStats.hungerBarShown();
+	}
+
+	@Override
+	public float[] food() {
+		return WorldStats.food();
+	}
+
+	@Override
+	public float[] heldFood() {
+		return WorldStats.heldFood();
+	}
+
+	@Override
+	public String resourcePack() {
+		return WorldStats.resourcePack();
+	}
+
+	@Override
+	public boolean dead() {
+		return WorldStats.dead();
+	}
+
+	@Override
+	public void sendChat(String text) {
+		WorldStats.sendChat(text);
+	}
+
+	@Override
+	public int playerCount() {
+		ClientPacketListener connection = mc().getConnection();
+		//#if MC >= 1.19.3
+		return connection == null ? -1 : connection.getListedOnlinePlayers().size();
+		//#else
+		return connection == null ? -1 : connection.getOnlinePlayers().size();
+		//#endif
+	}
+
+	@Override
+	public int entityCount() {
+		//#if MC >= 1.14
+		return mc().level == null ? -1 : mc().level.getEntityCount();
+		//#else
+		return mc().level == null ? -1 : mc().level.loadedEntities.size();
+		//#endif
+	}
+
+	@Override
+	public int[] primedTnt(double range) {
+		Minecraft mc = mc();
+		if (mc.level == null || mc.player == null) {
+			return null;
+		}
+		double px = Compat.x(mc.player);
+		double py = Compat.y(mc.player);
+		double pz = Compat.z(mc.player);
+		int soonest = Integer.MAX_VALUE;
+		int count = 0;
+		//#if MC >= 1.14
+		for (net.minecraft.world.entity.Entity e : mc.level.entitiesForRendering()) {
+		//#else
+		for (net.minecraft.world.entity.Entity e : mc.level.loadedEntities) {
+		//#endif
+			if (!(e instanceof net.minecraft.world.entity.item.PrimedTnt)) {
+				continue;
+			}
+			double dx = Compat.x(e) - px;
+			double dy = Compat.y(e) - py;
+			double dz = Compat.z(e) - pz;
+			if (dx * dx + dy * dy + dz * dz > range * range) {
+				continue;
+			}
+			count++;
+			soonest = Math.min(soonest, ((net.minecraft.world.entity.item.PrimedTnt) e).getFuse());
+		}
+		return count == 0 ? null : new int[] {Math.max(0, soonest), count};
+	}
+
+	@Override
+	public Object connectionKey() {
+		return mc().getConnection();
+	}
+
+	@Override
+	public List<Object[]> otherPlayers() {
+		List<Object[]> out = new ArrayList<>();
+		Minecraft mc = mc();
+		if (mc.level == null) {
+			return out;
+		}
+		UUID self = playerId();
+		//#if MC >= 1.14
+		for (AbstractClientPlayer p : mc.level.players()) {
+		//#else
+		for (net.minecraft.world.entity.player.Player player : mc.level.playerEntities) {
+			if (!(player instanceof AbstractClientPlayer)) {
+				continue;
+			}
+			AbstractClientPlayer p = (AbstractClientPlayer) player;
+		//#endif
+			if (!p.getUUID().equals(self)) {
+				out.add(new Object[] {p.getUUID(), Compat.playerName(p), Compat.x(p), Compat.y(p), Compat.z(p), (double) Compat.yRot(p)});
+			}
+		}
+		return out;
+	}
+
+	@Override
+	public double fovDegrees() {
+		//#if MC >= 1.19
+		return Minecraft.getInstance().options.fov().get();
+		//#else
+		return Minecraft.getInstance().options.fov;
+		//#endif
+	}
+
+	@Override
+	public boolean smoothCamera() {
+		return Minecraft.getInstance().options.smoothCamera;
+	}
+
+	@Override
+	public void smoothCamera(boolean on) {
+		Minecraft.getInstance().options.smoothCamera = on;
+	}
+}

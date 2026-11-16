@@ -1,0 +1,668 @@
+package com.arcticlauncher.client;
+
+import com.arcticlauncher.client.ui.Page;
+import java.io.File;
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Everything the core needs from Minecraft. Each version adapter implements
+ * this; the core never touches game classes.
+ */
+public interface Platform extends com.arcticlauncher.client.controller.GamepadHost {
+	/** The running Minecraft version, like "26.3". */
+	String minecraftVersion();
+
+	/**
+	 * Minecraft's own text for translation {@code key} in the player's language, or {@code english}
+	 * when this version has no such key.
+	 */
+	default String translate(String key, String english) {
+		return english;
+	}
+
+	File configDir();
+
+	void log(boolean warning, String message);
+
+	// ---- Game state -------------------------------------------------------
+
+	int fps();
+
+	/** Latency to the server in ms, or -1 in singleplayer / menus. */
+	int ping();
+
+	/** Another player's ping (from the player list) in ms, or -1 when unknown (or in singleplayer). */
+	default int ping(java.util.UUID player) {
+		return -1;
+	}
+
+	/** True while playing (a world is loaded). */
+	boolean inWorld();
+
+	/** Whether the game's window is the one in use (Dynamic FPS slows the game down when it isn't). */
+	default boolean windowFocused() {
+		return true;
+	}
+
+	/** Safe place to start deferred replay exports (never while browsing another menu). */
+	default boolean atTitleScreen() { return false; }
+
+	/** Player {x, y, z, yaw, pitch}, or null outside a world. */
+	double[] position();
+
+	boolean keyDown(GameKey key);
+
+	/** The biome at the player, like "Snowy Plains", or null. */
+	String biome();
+
+	/** The server's address, "Singleplayer", or null outside a world. */
+	String server();
+
+	/** The multiplayer server the game is connecting to or is on (null: none, or singleplayer). */
+	default String connectingServer() {
+		return null;
+	}
+
+	/** World time in ticks (day = time / 24000), or -1 outside a world. */
+	long dayTime();
+
+	// ---- Keys and camera (features) ------------------------------------------------
+
+	/** Is the key with this Minecraft name ("key.keyboard.c") held? */
+	boolean isKeyDown(String key);
+
+	/** A key's label for menus ("C", "Left Alt"). */
+	String keyLabel(String key);
+
+	/** The Minecraft name of a key the game reported (a native key code). */
+	String keyName(int nativeKey);
+
+	/** Switch to third person (true) or back to the view before (false). */
+	void setThirdPerson(boolean on);
+
+	/** Zoom, Freelook, Fullbright and the other game features work on this version. */
+	boolean hasFeatures();
+
+	/** Freelook and Snaplook can turn the camera on this version (they need a hook into how the view is set up). */
+	default boolean freelookWorks() {
+		return true;
+	}
+
+	/** The smooth font pack is on. */
+	boolean smoothFont();
+
+	/** Switch the smooth font (reloads the game's resources). */
+	void setSmoothFont(boolean on);
+
+	/** Is the key bound to a control physically held (ignoring toggles)? */
+	boolean physicalKeyDown(GameKey key);
+
+	/** Press or release a control as if its key were held. */
+	void setKeyDown(GameKey key, boolean down);
+
+	/** How long ago the player was hurt, in ticks (vanilla hurtTime), 0 if not. */
+	int hurtTime();
+
+	// ---- HUD data (items are the game's own stacks, drawn with Gfx.item) ------
+
+	/** Worn armor, head to feet, then the main hand: {stack, durability text or null}. */
+	java.util.List<Object[]> armor();
+
+	/** Active effects: {name, time left like "1:23", color (Integer ARGB), icon sprite or null}. */
+	java.util.List<Object[]> effects();
+
+	/** The held item and how many of it you carry: {stack, total}, or null. */
+	Object[] heldItem();
+
+	// ---- Client Sort: clicking the slots of the open chest or inventory ------------------
+
+	/** The slots (numbers in the open container) of the section under the mouse that Sort works on, or null. */
+	default int[] sortSlots() {
+		return null;
+	}
+
+	/** What is in container slot {@code slot}: {key, name, count (Integer), max stack (Integer)}, or null when empty. */
+	default Object[] slotInfo(int slot) {
+		return null;
+	}
+
+	/** A plain left click on container slot {@code slot}, as the player would. */
+	default void slotClick(int slot) {}
+
+	/** A chest or inventory screen is open. */
+	default boolean sortScreenOpen() {
+		return false;
+	}
+
+	/** The mouse is holding an item. */
+	default boolean cursorHolds() {
+		return false;
+	}
+
+	/** Everything you carry, one row per kind: {key (String), a copy of one stack, name (String), count (Integer)}. */
+	default java.util.List<Object[]> carried() {
+		return java.util.Collections.emptyList();
+	}
+
+	/**
+	 * Bake a cosmetic (its model, PNG texture and, if it has one, the PNG of
+	 * the parts that glow) for drawing, on the render thread; then call
+	 * {@code Cosmetics.ready(id)}.
+	 */
+	default void registerCosmetic(String id, com.arcticlauncher.client.looks.Geometry geometry, byte[] png, byte[] glow) {}
+
+	/**
+	 * Bake a sculpted cosmetic (its triangles and embedded textures) for
+	 * drawing, on the render thread; then call {@code Cosmetics.ready(id)}.
+	 */
+	default void registerMesh(String id, com.arcticlauncher.client.looks.MeshModel mesh) {}
+
+	/** The local player is moving (walking, jumping, sneaking): stops emotes. */
+	default boolean localMoving() {
+		return false;
+	}
+
+	/**
+	 * The local player's UUID in the current world (on offline-mode servers
+	 * the one derived from the name), or null outside a world.
+	 */
+	default java.util.UUID worldPlayerId() {
+		return null;
+	}
+
+	/** Run on the game's main thread. */
+	default void runOnGameThread(Runnable r) {
+		r.run();
+	}
+
+	/**
+	 * Play as another account from now on (outside a world). Returns why it
+	 * couldn't, or null when done.
+	 */
+	default String switchAccount(String name, java.util.UUID uuid, String accessToken, String xuid, boolean microsoft) {
+		return "not supported on this version yet";
+	}
+
+	/** Ctrl (Cmd on macOS) is held. */
+	default boolean shiftDown() {
+		return false;
+	}
+
+	default boolean controlDown() {
+		return false;
+	}
+
+	/** Put text on the clipboard. */
+	default void setClipboard(String text) {}
+
+	/** Text on the clipboard ("" if none). */
+	default String clipboard() {
+		return "";
+	}
+
+	/** Typing starts or stops (some versions only deliver text while it's on). */
+	default void textInput(Object owner, boolean on) {}
+
+	/**
+	 * The proxy changed (null = off): route new server connections through
+	 * it and answer its login prompts.
+	 */
+	default void proxyChanged(com.arcticlauncher.client.config.ProxyConfig proxy) {}
+
+	/** A stack of the item with this id (like "minecraft:arrow") for editor previews, or null. */
+	default Object sampleItem(String id) {
+		return null;
+	}
+
+	/** The HUD icon sprite of the effect with this id (like "minecraft:speed"), or null. */
+	default Object effectSprite(String id) {
+		return null;
+	}
+
+	/** The name of the block or creature under the crosshair (within reach), or null. */
+	default String aimedName() {
+		return null;
+	}
+
+	/** The creature you're aiming at or just hit: {name, health, max health}, or null. */
+	Object[] target();
+
+	/** The vanilla HUD is hidden (F1) or covered by the debug screen. */
+	boolean hudHidden();
+
+	// ---- Screens ----------------------------------------------------------
+
+	/** Show a core page, returning to the current screen when it closes. */
+	void openPage(Page page);
+
+	/**
+	 * Open {@code page} over the current screen, so closing it comes back to that screen (Right Shift
+	 * on a server list returns to the server list, not to what was under it). Defaults to openPage.
+	 */
+	default void openPageOver(Page page) {
+		openPage(page);
+	}
+
+	/** Close the current page, back to where it was opened from. */
+	void closePage();
+
+	/** Open a vanilla screen or do a vanilla action from the title menu. */
+	void action(MenuAction action);
+
+	// ---- Looks ------------------------------------------------------------
+
+	UUID playerId();
+
+	String playerName();
+
+	/**
+	 * Make a downloaded PNG drawable as {@code "look:" + hash}. Called off
+	 * the render thread; call {@code ArcticClient.looks().textureReady(hash,
+	 * frames)} once it's registered. A {@code cape} whose image stacks
+	 * several 2:1 frames (see {@code Looks.capeFrames}) is registered as
+	 * {@code hash + "/" + i} per frame instead.
+	 */
+	void registerTexture(String hash, byte[] png, boolean cape);
+
+	/** Mojang session join, to prove who we are to the Arctic server. */
+	void joinServer(String serverId) throws Exception;
+
+	/** What you're aiming at: 0 nothing, 1 a player, 2 a hostile mob, 3 another creature. */
+	default int aimKind() {
+		return 0;
+	}
+
+	/**
+	 * Whether this version can talk to Simple Voice Chat servers (and the
+	 * Simple Voice Chat mod itself isn't installed).
+	 */
+	default boolean canSimpleVoiceChat() {
+		return false;
+	}
+
+	/** Ask the server for a Simple Voice Chat secret (it answers through {@code VoiceLink}). */
+	default void requestSimpleVoiceChat() {}
+
+	/** The current game connection (changes on every join or server switch), or null. */
+	default Object connectionKey() {
+		return null;
+	}
+
+	/** The world you're in: the server address, or "sp:" + the world's name; null in menus. */
+	default String worldKey() {
+		return null;
+	}
+
+	/** The dimension you're in ("overworld", "the_nether", "the_end", …). */
+	default String dimension() {
+		return "overworld";
+	}
+
+	/** This version lets the HUD editor move the game's scoreboard and boss bar ({@code Hud.vanillaPlacement}). */
+	default boolean movesVanillaParts() {
+		return false;
+	}
+
+	/** This version has the minimap. */
+	default boolean minimapWorks() {
+		return false;
+	}
+
+	/** Worn armor and held items that wear out: {name, left, max, slot}. */
+	default java.util.List<Object[]> durability() {
+		return java.util.Collections.emptyList();
+	}
+
+	/** A short, quiet ping (someone mentioned you). */
+	default void mentionSound() {}
+
+	/**
+	 * The map colors (ARGB, like a map item; 0 = not loaded) of the {@code w}×{@code h} block
+	 * columns from ({@code x0}, {@code z0}), row by row into {@code out}; false where this
+	 * version has no minimap. Game thread.
+	 */
+	default boolean mapColumns(int x0, int z0, int w, int h, int[] out) {
+		return false;
+	}
+
+	/** Show these pixels ({@code size}×{@code size} ARGB, row by row) as the minimap's texture: its key, or null. Game thread. */
+	default String minimapPixels(int[] argb, int size) {
+		return null;
+	}
+
+	/** The game's resource pack folder, or null. */
+	default java.io.File resourcePackDir() {
+		return null;
+	}
+
+	/** Turn on a pack from the resource pack folder (by file name) and reload. */
+	default void enableResourcePack(String fileName) {}
+
+	/** Commands take 1.8.9 to 1.12.2's syntax (camelCase game rules, "effect @a clear", replaceitem). */
+	default boolean oldCommands() {
+		return false;
+	}
+
+	/** Game rules have camelCase names (1.13 to 1.21.10; snake_case from 1.21.11, as in 26.x). */
+	default boolean camelCaseRules() {
+		return false;
+	}
+
+	/** Armour is given with "replaceitem" and 1.13's slot names (1.13 to 1.16; "item replace" from 1.17). */
+	default boolean replaceItemCommand() {
+		return false;
+	}
+
+	/** Where a flat world's ground is: y 4 before 1.18, y -60 after (worlds got deeper). */
+	default int flatGroundY() {
+		return -60;
+	}
+
+	/** The duel world isn't flat (made through the Create World screen): duel on an arena built in the sky. */
+	default boolean duelArena() {
+		return false;
+	}
+
+	/** This version can make a duel world and open it to LAN. */
+	default boolean canDuel() {
+		return false;
+	}
+
+	/** Leave any world and make a flat duel world (with cheats on). */
+	default void createDuelWorld() {}
+
+	/** In a world you host yourself (singleplayer, not a server). */
+	default boolean inSingleplayerWorld() {
+		return false;
+	}
+
+	/** Open the world you're in to LAN; true when it's open. */
+	default boolean openToLan() {
+		return false;
+	}
+
+	/** Open the world you're in to LAN the way the game's own button does (survival, no cheats); true when it's open. */
+	default boolean openToLanPlain() {
+		return false;
+	}
+
+	/** The world you're in is already open to LAN. */
+	default boolean openToLanDone() {
+		return false;
+	}
+
+	/** Tint hurt mobs with this color (RGB; 0 = the game's red). */
+	default void setHitColor(int rgb) {}
+
+	/** Hit color works on this version. */
+	default boolean hitColorWorks() {
+		return false;
+	}
+
+	/** The 1.7 animations (swing while blocking) work on this version: only where swords block (1.8.9). */
+	default boolean oldAnimationsWork() {
+		return false;
+	}
+
+	/** Motion blur works on this version. */
+	default boolean motionBlurWorks() {
+		return false;
+	}
+
+	/** Chunk Borders can show the chunk edges: the game has its own F3+G drawing on this version. */
+	/** How much of the item cooldown of a carried item (id part) is left, 0 to 1; -1 when you don't carry it. */
+	default float cooldown(String idPart) {
+		return -1f;
+	}
+
+	/** Item cooldowns exist and can be read on this version (the game has them from 1.9). */
+	default boolean cooldownsWork() {
+		return false;
+	}
+
+	/** The Scrollable Tooltips work on this version. */
+	default boolean tooltipScrollWorks() {
+		return false;
+	}
+
+	/** The Glint Colorizer works on this version. */
+	default boolean glintWorks() {
+		return false;
+	}
+
+	/** The Dynamic FOV switches work on this version. */
+	default boolean dynamicFovWorks() {
+		return false;
+	}
+
+	/** The Fog settings work on this version. */
+	default boolean fogWorks() {
+		return false;
+	}
+
+	/** The horse you ride or aim at: {speed in blocks per second, jump height in blocks, health, max health}, or null. */
+	default float[] horseStats() {
+		return null;
+	}
+
+	/** Horse Stats works on this version. */
+	default boolean horseStatsWorks() {
+		return false;
+	}
+
+	default boolean chunkBordersWorks() {
+		return false;
+	}
+
+	/** Item physics works on this version. */
+	default boolean itemPhysicsWorks() {
+		return false;
+	}
+
+	/** The block outline settings work on this version. */
+	default boolean outlineTweaks() {
+		return false;
+	}
+
+	/** The outline's thickness can change (its lines aren't shared with every other line drawn). */
+	default boolean outlineWidthWorks() {
+		return outlineTweaks();
+	}
+
+	/** The scoreboard switches work on this version. */
+	default boolean scoreboardTweaks() {
+		return false;
+	}
+
+	/** Where Minecraft's own toasts end (GUI pixels from the top), 0 when none show. */
+	default int toastsBottom() {
+		return 0;
+	}
+
+	/** Light where you stand: {block light, sky light}, or null. */
+	default int[] light() {
+		return null;
+	}
+
+	/** How many items whose id contains {@code idPart} you carry, or -1. */
+	/**
+	 * The arrows you carry, one row per kind (plain, spectral, each tipped
+	 * kind): {an item stack to draw, how many (Integer)}. Empty outside a world.
+	 */
+	default java.util.List<Object[]> arrows() {
+		return java.util.Collections.emptyList();
+	}
+
+	default int countItems(String idPart) {
+		return -1;
+	}
+
+	/** The game's hunger bar is on screen (survival, not riding a mount): where the saturation line goes. */
+	default boolean hungerBarShown() {
+		return false;
+	}
+
+	/**
+	 * The food in your hand (main hand, else off hand) as {hunger it gives, saturation it adds}, or null when it
+	 * isn't food or this version doesn't tell (Saturation Bar flashes what eating it would do).
+	 */
+	default float[] heldFood() {
+		return null;
+	}
+
+	/** Hunger and saturation: {food 0-20, saturation}, or null. */
+	default float[] food() {
+		return null;
+	}
+
+	/** The top resource pack you picked, or null for none. */
+	default String resourcePack() {
+		return null;
+	}
+
+	/** You're dead (the death screen). */
+	default boolean dead() {
+		return false;
+	}
+
+	/** Send a chat message, or a command when it starts with "/". */
+	default void sendChat(String text) {}
+
+	/** Players online on the server (the tab list), or -1 when not connected. */
+	default int playerCount() {
+		return -1;
+	}
+
+	/** Your health: {health, max} in half hearts, or null outside a world. */
+	default float[] health() {
+		return null;
+	}
+
+	/** Plays a short interface sound: 1 ding, 2 orb, 3 level-up (volume 0-1). */
+	default void playSound(int kind, float volume) {}
+
+	/** The creature you last hit has died (it is no longer alive in your world). */
+	default boolean lastTargetDead() {
+		return false;
+	}
+
+	/** The registry name of the item in the main or off hand ("ender_pearl", "shield"), or null for none (or no off hand). */
+	default String heldItemName(boolean offHand) {
+		return null;
+	}
+
+	/** Swords block on this version (1.8); from 1.9 only shields do. */
+	default boolean swordBlocks() {
+		return false;
+	}
+
+	/** Blocks you have fallen so far (0 on the ground). */
+	default float fallDistance() {
+		return 0;
+	}
+
+	/** No screen or menu is open over the game. */
+	default boolean noScreen() {
+		return false;
+	}
+
+	/** Lit TNT shows the seconds left above it ("2.4"); with {@code on} false the names are put back. Each tick. */
+	default void tntLabels(boolean on) {}
+
+	/** The screen, particle and hand hooks of Lock Slots, Inventory Search, Particle Control, Held Item and Shulker Peek exist on this version (not on 1.13.2). */
+	default boolean hasScreenHooks() {
+		return true;
+	}
+
+	/** Another zoom on the game (OptiFine's) shares the zoom key with Arctic's: switch it off. True when it was found and changed. */
+	default boolean disableOtherZoom() {
+		return false;
+	}
+
+	/** The smooth font's look changed (anti-aliasing): build its letters again. */
+	default void reloadFonts() {}
+
+	/** Shulker Peek works on this version (shulker boxes came in 1.11). */
+	default boolean canPeekShulkers() {
+		return false;
+	}
+
+	/** What a container item (shulker box, chest...) holds: its slots as the game's stacks (null for empty), or null for another item or an empty one. */
+	default Object[] peek(Object stack) {
+		return null;
+	}
+
+	/** The colour (0xRRGGBB) the container item gives Shulker Peek's window, 0 for the plain look. */
+	default int peekTint(Object stack) {
+		return 0;
+	}
+
+	/** Entities the world has loaded around you, or -1 outside a world. */
+	default int entityCount() {
+		return -1;
+	}
+
+	/** Lit TNT within {@code range} blocks of you: {fuse ticks left of the soonest, how many}, or null with none (or no support). */
+	default int[] primedTnt(double range) {
+		return null;
+	}
+
+	/** Other players in the world: {uuid, name, x, y, z, yaw}. */
+	List<Object[]> otherPlayers();
+
+	/**
+	 * Leave the current world (if any) and join a server. False where this
+	 * version can't (the player joins from the multiplayer list instead).
+	 */
+	boolean connectTo(String address);
+
+	/**
+	 * Join a saved server as the game's own list would: with its name, and its server resource
+	 * pack choice ({@code acceptPacks}: true, false, or null to ask). False where this version
+	 * can't; {@link #connectTo} by address then.
+	 */
+	default boolean joinSaved(String name, String address, Boolean acceptPacks) {
+		return false;
+	}
+
+	/** The network protocol this game speaks (for asking servers how they are); 0 if unknown. */
+	default int protocol() {
+		return 0;
+	}
+
+	/**
+	 * The camera this frame: {x, y, z, yaw, pitch, vertical FOV in degrees},
+	 * or null outside a world (for drawing things where they are in the world).
+	 */
+	default double[] camera() {
+		return null;
+	}
+
+	/**
+	 * The resource packs you have: turned-on ones first (top pack first),
+	 * then the rest. Arctic's own hidden packs aren't listed. Game thread.
+	 */
+	default java.util.List<com.arcticlauncher.client.packs.PackInfo> resourcePacks() {
+		return java.util.Collections.emptyList();
+	}
+
+	/** Turn on exactly these packs (top first) and reload the game's resources. Game thread. */
+	default void setResourcePacks(java.util.List<String> enabledTopFirst) {}
+
+	/** Leave the world or server you're in, back to the title screen (game thread). */
+	void leaveWorld();
+
+	/** The player's field of view setting, in degrees. */
+	default double fovDegrees() {
+		return 70;
+	}
+
+	/** Whether the game's smooth (cinematic) camera is on. */
+	default boolean smoothCamera() {
+		return false;
+	}
+
+	/** Turn the game's smooth (cinematic) camera on or off. */
+	default void smoothCamera(boolean on) {}
+}

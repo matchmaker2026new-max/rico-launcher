@@ -1,0 +1,42 @@
+[workspace]
+resolver = "3"
+members = ["crates/arctic-core", "crates/arctic-ping", "crates/arctic-voice", "crates/arctic-app", "crates/arctic-cli", "crates/arctic-share", "crates/arctic-mesh"]
+
+[workspace.package]
+version = "0.6.0"
+edition = "2024"
+license = "LicenseRef-RICO-Source-Available-Restricted"
+repository = "https://github.com/brksfrb/arctic-launcher"
+homepage = "https://arcticlauncher.com"
+authors = ["RICO Launcher contributors"]
+
+# Dependencies (zip, inflate, JSON) optimized even in dev builds: reading
+# thousands of mod jars when importing is otherwise very slow.
+[profile.dev.package."*"]
+opt-level = 2
+
+# Release: small (a lightweight launcher), but full speed where it counts:
+# hashing and unpacking game files, decoding images, drawing and text.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
+opt-level = "s"
+
+[profile.release.package]
+sha1 = { opt-level = 3 }
+sha2 = { opt-level = 3 }
+lzma-rs = { opt-level = 3 }
+miniz_oxide = { opt-level = 3 }
+flate2 = { opt-level = 3 }
+zip = { opt-level = 3 }
+image = { opt-level = 3 }
+png = { opt-level = 3 }
+zune-jpeg = { opt-level = 3 }
+image-webp = { opt-level = 3 }
+epaint = { opt-level = 3 }
+egui_glow = { opt-level = 3 }
+vello_cpu = { opt-level = 3 }
+fearless_simd = { opt-level = 3 }
+skrifa = { opt-level = 3 }
+harfrust = { opt-level = 3 }

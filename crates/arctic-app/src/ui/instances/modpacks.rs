@@ -1,0 +1,363 @@
+//! Modpack browser: search Modrinth modpacks and install one as a new
+//! instance, or import a `.mrpack` file.
+
+use arctic_core::instances::Instance;
+use arctic_core::mods::{ProjectHit, SearchQuery, SortBy};
+use eframe::egui::{self, RichText};
+
+use super::Load;
+use super::mods_page::mod_icon;
+use crate::app::ArcticApp;
+use crate::art::icons::Icon;
+use crate::theme;
+use crate::toasts::Kind;
+use crate::widgets;
+
+const PAGE_SIZE: usize = 20;
+const SEARCH_DELAY: f64 = 0.35;
+/// Marks the shared search state as belonging to this page.
+const SEARCH_OWNER: &str = "\0modpacks";
+
+impl ArcticApp {
+    pub(super) fn modpacks_page(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette();
+        if widgets::button(
+            ui,
+            p,
+            Some(Icon::ChevronLeft),
+            crate::i18n::current("All instances"),
+            false,
+        )
+        .clicked()
+        {
+            self.inst.modpacks_open = false;
+            return;
+        }
+        ui.add_space(8.0);
+        crate::widgets::row(ui, |ui| {
+            ui.vertical(|ui| {
+                widgets::page_header(
+                    ui,
+                    p,
+                    crate::i18n::current("Modpacks"),
+                    crate::i18n::current("Search modpacks on Modrinth"),
+                );
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                let busy = self.inst.pack_installing.is_some();
+                let import = ui
+                    .add_enabled_ui(!busy, |ui| {
+                        widgets::button(
+                            ui,
+                            p,
+                            Some(Icon::Folder),
+                            crate::i18n::current("Import .mrpack…"),
+                            false,
+                        )
+                    })
+                    .inner;
+                if import.clicked() {
+                    self.inst.pack_installing = Some(String::new());
+                    self.tasks.import_modpack_file();
+                }
+            });
+        });
+        if self.inst.search.instance.as_deref() != Some(SEARCH_OWNER) {
+            self.inst.search.instance = Some(SEARCH_OWNER.to_owned());
+            self.inst.search.text.clear();
+            self.inst.search.sort = SortBy::Downloads;
+            self.run_pack_search();
+        }
+        self.pack_search_bar(ui);
+        ui.add_space(8.0);
+        self.pack_install_progress(ui);
+        self.pack_results(ui);
+    }
+
+    fn pack_search_bar(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette();
+        let mut search = false;
+        crate::widgets::row(ui, |ui| {
+            let field = ui.add(
+                widgets::text_field(&mut self.inst.search.text)
+                    .hint_text(crate::i18n::current("Search modpacks on Modrinth"))
+                    .desired_width(360.0),
+            );
+            let now = ui.input(|i| i.time);
+            if field.changed() {
+                self.inst.search.typed_at = Some(now);
+            }
+            search |= field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            if let Some(at) = self.inst.search.typed_at {
+                if now - at >= SEARCH_DELAY {
+                    search = true;
+                } else {
+                    ui.ctx()
+                        .request_repaint_after(std::time::Duration::from_secs_f64(
+                            SEARCH_DELAY - (now - at),
+                        ));
+                }
+            }
+            let before = self.inst.search.sort;
+            super::browse::sort_combo(ui, "pack_sort", &mut self.inst.search.sort);
+            search |= self.inst.search.sort != before;
+            search |= widgets::button(ui, p, None, crate::i18n::current("Search"), true).clicked();
+        });
+        if search {
+            self.inst.search.typed_at = None;
+            self.run_pack_search();
+        }
+    }
+
+    fn run_pack_search(&mut self) {
+        self.run_pack_search_from(0);
+    }
+
+    fn run_pack_search_from(&mut self, offset: usize) {
+        let search = &mut self.inst.search;
+        search.request += 1;
+        search.loading = true;
+        search.more_from = offset;
+        if offset == 0 {
+            search.results = None;
+        }
+        let query = SearchQuery {
+            text: search.text.trim().to_owned(),
+            sort: search.sort,
+            offset,
+            limit: PAGE_SIZE,
+            project_type: arctic_core::mods::ProjectType::Modpack,
+            ..SearchQuery::default()
+        };
+        self.tasks.mod_search(search.request, query);
+    }
+
+    fn pack_install_progress(&mut self, ui: &mut egui::Ui) {
+        if self.inst.pack_installing.is_none() {
+            return;
+        }
+        let p = self.palette();
+        ui.horizontal(|ui| {
+            ui.spinner();
+            match &self.inst.install_progress {
+                Some(progress) if progress.bytes_total > 0 => {
+                    let f = progress.bytes_done as f32 / progress.bytes_total as f32;
+                    ui.add(
+                        egui::ProgressBar::new(f)
+                            .desired_width(320.0)
+                            .text(progress.stage.clone()),
+                    );
+                }
+                Some(progress) => {
+                    ui.label(RichText::new(&progress.stage).color(p.muted));
+                }
+                None => {
+                    ui.label(
+                        RichText::new(crate::i18n::current("Installing modpack…")).color(p.muted),
+                    );
+                }
+            }
+        });
+        ui.add_space(8.0);
+    }
+
+    fn pack_results(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette();
+        let hits = match &self.inst.search.results {
+            None => {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(
+                        RichText::new(crate::i18n::current("Searching Modrinth…")).color(p.muted),
+                    );
+                });
+                return;
+            }
+            Some(Err(e)) => {
+                ui.label(RichText::new(format!("Search failed: {e}")).color(p.error));
+                return;
+            }
+            Some(Ok(page)) if page.hits.is_empty() => {
+                ui.label(RichText::new(crate::i18n::current("No modpacks found.")).color(p.muted));
+                return;
+            }
+            Some(Ok(page)) => page.hits.clone(),
+        };
+        theme::card(p).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            for hit in &hits {
+                self.pack_row(ui, hit);
+                ui.separator();
+            }
+        });
+        if let Some(from) = super::more_on_scroll(ui, p, &self.inst.search) {
+            self.run_pack_search_from(from);
+        }
+    }
+
+    fn pack_row(&mut self, ui: &mut egui::Ui, hit: &ProjectHit) {
+        let p = self.palette();
+        crate::widgets::row(ui, |ui| {
+            mod_icon(ui, self, hit.icon_url.as_deref());
+            ui.vertical(|ui| {
+                ui.set_max_width(ui.available_width() - 130.0);
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(&hit.title).strong().color(p.text));
+                    ui.label(
+                        RichText::new(crate::tr_format!("by {}", hit.author))
+                            .small()
+                            .color(p.muted),
+                    );
+                });
+                ui.label(RichText::new(&hit.description).color(p.muted));
+                ui.label(
+                    RichText::new(format!(
+                        "{} downloads",
+                        super::browse::compact(hit.downloads)
+                    ))
+                    .small()
+                    .color(p.muted),
+                );
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let busy = self.inst.pack_installing.is_some();
+                if self.inst.pack_installing.as_deref() == Some(hit.project_id.as_str()) {
+                    ui.spinner();
+                } else {
+                    let install = ui
+                        .add_enabled_ui(!busy, |ui| {
+                            widgets::button(
+                                ui,
+                                p,
+                                Some(Icon::Plus),
+                                crate::i18n::current("Install"),
+                                true,
+                            )
+                        })
+                        .inner;
+                    if install.clicked() {
+                        self.inst.pack_installing = Some(hit.project_id.clone());
+                        self.inst.install_progress = None;
+                        self.tasks.install_modpack(hit.project_id.clone(), None);
+                    }
+                }
+                let open = self.inst.pack_choosing.as_deref() == Some(hit.project_id.as_str());
+                let label = if open {
+                    crate::i18n::current("Hide versions")
+                } else {
+                    crate::i18n::current("Versions")
+                };
+                if widgets::button(ui, p, None, label, false).clicked() {
+                    if open {
+                        self.inst.pack_choosing = None;
+                    } else {
+                        self.inst.pack_choosing = Some(hit.project_id.clone());
+                        if !self.inst.pack_versions.contains_key(&hit.project_id) {
+                            self.inst
+                                .pack_versions
+                                .insert(hit.project_id.clone(), Load::Loading);
+                            self.tasks.pack_versions(hit.project_id.clone());
+                        }
+                    }
+                }
+            });
+        });
+        if self.inst.pack_choosing.as_deref() == Some(hit.project_id.as_str()) {
+            self.pack_version_list(ui, &hit.project_id);
+        }
+    }
+
+    /// The versions of one modpack, each with its Minecraft version and loader and an Install button.
+    fn pack_version_list(&mut self, ui: &mut egui::Ui, project_id: &str) {
+        let p = self.palette();
+        let versions = match self.inst.pack_versions.get(project_id) {
+            None | Some(Load::Loading) => {
+                ui.spinner();
+                return;
+            }
+            Some(Load::Failed(e)) => {
+                ui.label(RichText::new(format!("Could not load the versions: {e}")).color(p.error));
+                return;
+            }
+            Some(Load::Ready(list)) => list.clone(),
+        };
+        if versions.is_empty() {
+            ui.label(
+                RichText::new(crate::i18n::current(
+                    "This modpack has no installable versions.",
+                ))
+                .color(p.muted),
+            );
+            return;
+        }
+        let busy = self.inst.pack_installing.is_some();
+        let mut chosen = None;
+        egui::ScrollArea::vertical()
+            .id_salt("pack_versions")
+            .max_height(240.0)
+            .show(ui, |ui| {
+                for v in &versions {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(&v.label).strong().color(p.text));
+                        ui.label(
+                            RichText::new(format!(
+                                "{} · {} · {}",
+                                v.game_versions.join(", "),
+                                v.loaders.join(", "),
+                                v.version_type
+                            ))
+                            .small()
+                            .color(p.muted),
+                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let install = ui
+                                .add_enabled_ui(!busy, |ui| {
+                                    widgets::button(
+                                        ui,
+                                        p,
+                                        Some(Icon::Plus),
+                                        crate::i18n::current("Install"),
+                                        false,
+                                    )
+                                })
+                                .inner;
+                            if install.clicked() {
+                                chosen = Some(v.id.clone());
+                            }
+                        });
+                    });
+                }
+            });
+        if let Some(version_id) = chosen {
+            self.inst.pack_installing = Some(project_id.to_owned());
+            self.inst.install_progress = None;
+            self.inst.pack_choosing = None;
+            self.tasks
+                .install_modpack(project_id.to_owned(), Some(version_id));
+        }
+    }
+
+    /// A modpack install (or import) finished.
+    pub(crate) fn on_modpack_installed(&mut self, result: Result<Option<Instance>, String>) {
+        self.inst.pack_installing = None;
+        self.inst.install_progress = None;
+        match result {
+            Ok(Some(instance)) => {
+                self.reload_instances();
+                self.toasts.push(
+                    Kind::Success,
+                    crate::tr_format!("Installed {}", instance.name),
+                    "Press Play when you're ready.",
+                );
+                self.inst.modpacks_open = false;
+                self.open_instance(&instance.id);
+            }
+            Ok(None) => {}
+            Err(e) => self.toasts.push(
+                Kind::Error,
+                crate::i18n::current("Could not install modpack"),
+                e,
+            ),
+        }
+    }
+}

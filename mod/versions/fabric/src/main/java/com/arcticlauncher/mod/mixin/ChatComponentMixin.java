@@ -1,0 +1,194 @@
+package com.arcticlauncher.mod.mixin;
+
+import com.arcticlauncher.client.ArcticClient;
+import com.arcticlauncher.client.config.ClientConfig;
+import java.util.List;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.components.ChatComponent;
+//#if MC >= 26.1
+import net.minecraft.client.multiplayer.chat.GuiMessage;
+//#else
+import net.minecraft.client.GuiMessage;
+//#endif
+import net.minecraft.network.chat.Component;
+import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Constant;
+import org.spongepowered.asm.mixin.injection.ModifyConstant;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+/** Chat timestamps, repeated lines stacked as "(x3)", mentions of you marked, and a longer history. */
+@Mixin(ChatComponent.class)
+abstract class ChatComponentMixin {
+	@Unique
+	private static final int STACK_REFRESH_ALWAYS = 500;
+	@Unique
+	private static final long STACK_REFRESH_MS = 250;
+
+	@Shadow
+	@Final
+	private List<GuiMessage> allMessages;
+
+	@Unique
+	private final com.arcticlauncher.client.feature.ChatStacker arctic$stacker = new com.arcticlauncher.client.feature.ChatStacker();
+
+	@Unique
+	private int arctic$repeats;
+
+	/** When the visible lines were last rebuilt for a stacked line (a long history makes that slow). */
+	@Unique
+	private long arctic$stackRefreshAt;
+
+	/** How many messages the chat keeps: the game's 100 become the player's setting. */
+	@ModifyConstant(
+			//#if MC >= 1.20.6
+			method = {"addMessageToDisplayQueue", "addMessageToQueue"},
+			//#elif MC >= 1.19
+			method = "addMessage(Lnet/minecraft/network/chat/Component;Lnet/minecraft/network/chat/MessageSignature;ILnet/minecraft/client/GuiMessageTag;Z)V",
+			//#else
+			method = "addMessage(Lnet/minecraft/network/chat/Component;IIZ)V",
+			//#endif
+			constant = @Constant(intValue = 100))
+	private int arctic$history(int vanilla) {
+		ClientConfig c = ArcticClient.config();
+		return c == null ? vanilla : c.chatHistory;
+	}
+
+	@Shadow
+	//#if MC >= 1.20.6
+	private void refreshTrimmedMessages() {}
+	//#elif MC >= 1.19
+	private void refreshTrimmedMessage() {}
+	//#else
+	// Before 1.19 the visible lines are rebuilt by rescaleChat.
+	public void rescaleChat() {}
+	//#endif
+
+	/** Hide the chat: none of its lines are drawn. */
+	@Inject(
+			//#if MC >= 26.1
+			method = "extractRenderState",
+			//#else
+			method = "render",
+			//#endif
+			at = @At("HEAD"), cancellable = true)
+	private void arctic$hide(CallbackInfo ci) {
+		ClientConfig c = ArcticClient.config();
+		if (c != null && c.chatOff) {
+			ci.cancel();
+		}
+	}
+
+	/** Keep chat when leaving: the game clears the chat on disconnect; this lets it stay. */
+	@Inject(method = "clearMessages", at = @At("HEAD"), cancellable = true)
+	private void arctic$keep(CallbackInfo ci) {
+		ClientConfig c = ArcticClient.config();
+		if (c != null && c.chatKeep) {
+			ci.cancel();
+		}
+	}
+
+	/** Muted players and hidden words: the line never reaches the chat. */
+	@Inject(
+			//#if MC >= 26.1
+			method = "addMessage(Lnet/minecraft/network/chat/Component;Lnet/minecraft/network/chat/MessageSignature;Lnet/minecraft/client/multiplayer/chat/GuiMessageSource;Lnet/minecraft/client/multiplayer/chat/GuiMessageTag;)V",
+			//#elif MC >= 1.19
+			method = "addMessage(Lnet/minecraft/network/chat/Component;Lnet/minecraft/network/chat/MessageSignature;Lnet/minecraft/client/GuiMessageTag;)V",
+			//#else
+			method = "addMessage(Lnet/minecraft/network/chat/Component;I)V",
+			//#endif
+			at = @At("HEAD"),
+			cancellable = true)
+	//#if MC >= 26.1
+	private void arctic$mute(Component message, net.minecraft.network.chat.MessageSignature signature,
+			net.minecraft.client.multiplayer.chat.GuiMessageSource source, net.minecraft.client.multiplayer.chat.GuiMessageTag tag,
+			CallbackInfo ci) {
+	//#elif MC >= 1.19
+	private void arctic$mute(Component message, net.minecraft.network.chat.MessageSignature signature,
+			net.minecraft.client.GuiMessageTag tag, CallbackInfo ci) {
+	//#else
+	private void arctic$mute(Component message, int id, CallbackInfo ci) {
+	//#endif
+		if (ArcticClient.chatHidden(message.getString())) {
+			ci.cancel();
+		}
+	}
+
+	@ModifyVariable(
+			//#if MC >= 26.1
+			method = "addMessage(Lnet/minecraft/network/chat/Component;Lnet/minecraft/network/chat/MessageSignature;Lnet/minecraft/client/multiplayer/chat/GuiMessageSource;Lnet/minecraft/client/multiplayer/chat/GuiMessageTag;)V",
+			//#elif MC >= 1.19
+			// Before 26.1 there's no separate GuiMessageSource: one 3-arg entry point.
+			method = "addMessage(Lnet/minecraft/network/chat/Component;Lnet/minecraft/network/chat/MessageSignature;Lnet/minecraft/client/GuiMessageTag;)V",
+			//#else
+			// Before 1.19 (no signed chat): new lines come through (message, id); the 4-arg one
+			// also re-adds old lines when the chat is rescaled.
+			method = "addMessage(Lnet/minecraft/network/chat/Component;I)V",
+			//#endif
+			at = @At("HEAD"),
+			argsOnly = true)
+	private Component arctic$chat(Component message) {
+		ClientConfig c = ArcticClient.config();
+		String text = message.getString();
+		ArcticClient.chatLine(text);
+		Component out = com.arcticlauncher.mod.ChatCopyComponents.tag(message, text, false);
+		int arctic$count = c.chatStack ? arctic$stacker.next(text, c) : 1;
+		if (!c.chatStack) {
+			arctic$stacker.reset();
+		}
+		if (arctic$count > 1 && !allMessages.isEmpty()) {
+			// The newest message is first: replace it with a counted copy.
+			arctic$repeats = arctic$count;
+			//#if MC >= 1.20.5
+			allMessages.removeFirst();
+			//#else
+			allMessages.remove(0);
+			//#endif
+			// Rebuilding every visible line costs time in proportion to the history: a burst of the
+			// same line rebuilds at most a few times a second (the lines catch up on the next one).
+			long now = System.currentTimeMillis();
+			if (allMessages.size() <= STACK_REFRESH_ALWAYS || now - arctic$stackRefreshAt >= STACK_REFRESH_MS) {
+				arctic$stackRefreshAt = now;
+				//#if MC >= 1.20.6
+				refreshTrimmedMessages();
+				//#elif MC >= 1.19
+				refreshTrimmedMessage();
+				//#else
+				rescaleChat();
+				//#endif
+			}
+			out = com.arcticlauncher.mod.ChatCopyComponents.tag(message, text, false).append(com.arcticlauncher.mod.ChatCopyComponents.tag(
+					com.arcticlauncher.mod.Compat.literal(" (x" + arctic$repeats + ")").withStyle(ChatFormatting.GRAY), text, false));
+		}
+		if (c.chatMentions && com.arcticlauncher.client.feature.Mentions.mentions(text, ArcticClient.platform().playerName())) {
+			// Side by side under a plain parent: as the parent, the marker's color
+			// would spread to every part of the message without its own.
+			out = com.arcticlauncher.mod.Compat.empty()
+					.append(com.arcticlauncher.mod.ChatCopyComponents.tag(
+							com.arcticlauncher.mod.Compat.literal("» ").withStyle(ChatFormatting.YELLOW), text, false)).append(out);
+			ArcticClient.platform().mentionSound();
+		}
+		if (c.chatTimestamps) {
+			net.minecraft.network.chat.MutableComponent stamp = com.arcticlauncher.mod.Compat
+					.literal(com.arcticlauncher.client.feature.ChatStamp.text(c)).withStyle(ChatFormatting.DARK_GRAY);
+			if (c.chatStampBold) {
+				stamp = stamp.withStyle(ChatFormatting.BOLD);
+			}
+			if (c.chatStampItalic) {
+				stamp = stamp.withStyle(ChatFormatting.ITALIC);
+			}
+			out = com.arcticlauncher.mod.Compat.empty()
+					.append(com.arcticlauncher.mod.ChatCopyComponents.tag(stamp, text, true)).append(out);
+		} else if (c.chatCopy) {
+			out = com.arcticlauncher.mod.Compat.empty()
+					.append(com.arcticlauncher.mod.ChatCopyComponents.tag(
+							com.arcticlauncher.mod.Compat.literal("[Copy] ").withStyle(ChatFormatting.DARK_GRAY), text, true)).append(out);
+		}
+		return out;
+	}
+}

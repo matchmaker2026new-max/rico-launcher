@@ -1,0 +1,7 @@
+plugins {
+	// 26.1+ ship unobfuscated; older versions need Loom's remapping flavor.
+	id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
+	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" apply false
+}
+
+apply from: 'common.gradle'

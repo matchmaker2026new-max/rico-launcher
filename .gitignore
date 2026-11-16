@@ -1,0 +1,46 @@
+# Build output
+/target/
+# The Arctic Client's jars (their pack, mod/dist/arctic-client.pack, is committed)
+/mod/dist/*.jar
+**/*.rs.bk
+
+# Local configuration and secrets — never commit these
+.env
+.env.*
+!.env.example
+msa.json
+*.secret
+*.pem
+*.key
+*.pfx
+*.p12
+*.jks
+*.keystore
+*.snk
+
+# Launcher data when running in portable mode / dev data dirs
+/data/
+portable.txt
+
+# AI assistant / local tooling notes (never committed)
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+AGENTS.md
+
+# Editors / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+__pycache__/
+
+# Cosmetic kit output (regenerate with the scripts in tools/)
+/crates/arctic-cosmetics/assets/tools/out/
+/crates/arctic-cosmetics/assets/tools/__pycache__/
+
+# Local release artifacts
+/dist/
+/packaging/windows/*.exe
+/packaging/windows/*.msi

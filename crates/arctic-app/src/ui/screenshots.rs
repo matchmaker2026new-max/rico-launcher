@@ -1,0 +1,811 @@
+//! Screenshots tab: every instance's screenshots as a grid of thumbnails
+//! (made in the background, cached), and a big preview with actions.
+
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use arctic_core::screenshots::{self, Shot};
+use eframe::egui::{self, CornerRadius, Id, Modal, RichText, Sense, vec2};
+
+use crate::app::ArcticApp;
+use crate::art::icons::Icon;
+use crate::toasts::Kind;
+use crate::widgets;
+
+const THUMB_W: f32 = 240.0;
+const THUMB_H: f32 = 135.0;
+/// Thumbnails asked for at once (the rest wait their turn).
+const MAX_LOADING: usize = 6;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Thumb {
+    Loading,
+    /// Registered with egui under this URI.
+    Ready(String),
+    Failed,
+}
+
+/// How the big preview is opening or closing: the picture grows out of its cell and shrinks
+/// back into it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum Motion {
+    #[default]
+    Settled,
+    Opening,
+    /// The picture has arrived and the dialog is fading in under it: the grown picture fades out
+    /// over that, so there is no empty frame between the two.
+    Handoff,
+    Closing,
+}
+
+/// The open picture's file and what its header says: its size, or why it can't be shown.
+type OpenCheck = (PathBuf, Result<(u32, u32), String>);
+
+/// Whether the open screenshot can be drawn yet.
+enum Load {
+    Ready,
+    Pending,
+    Failed(String),
+}
+
+/// How long the picture takes to grow or shrink (seconds).
+const MOTION_SECS: f64 = 0.22;
+
+/// How long to wait for a picture that is still loading before showing the dialog (with a
+/// spinner) instead of the grow-out animation.
+const LOAD_PATIENCE_SECS: f64 = 1.5;
+
+/// A picture that still hasn't loaded after this long is given up on (an error instead of waiting
+/// for ever).
+const LOAD_GIVE_UP_SECS: f64 = 20.0;
+
+/// The dialog frame's inner margin (see `dialog_frame`).
+const DIALOG_PADDING: f32 = 22.0;
+
+/// How long the grown picture and the dialog cross-fade (seconds).
+const HANDOFF_SECS: f64 = 0.14;
+
+/// How much taller the dialog is than its picture (the bar below it and the frame), until it has been
+/// measured: the grown picture stops where the dialog's picture will be, so nothing jumps.
+const DEFAULT_DIALOG_EXTRA: f32 = 86.0;
+
+#[derive(Default)]
+pub struct ScreenshotsUi {
+    /// Where the open picture's cell is on screen (it grows from and shrinks back to it).
+    cell: Option<egui::Rect>,
+    motion: Motion,
+    motion_started: f64,
+    /// When the picture was clicked open (egui time).
+    opened_at: f64,
+    /// The dialog's height minus its picture's, measured the last time it was shown (0 = not yet).
+    dialog_extra: f32,
+    shots: Option<Vec<Shot>>,
+    thumbs: HashMap<PathBuf, Thumb>,
+    /// Instance id to show, or every instance.
+    filter: Option<String>,
+    open: Option<Shot>,
+    /// Whether the open picture can be drawn at all, worked out once per opening.
+    open_check: Option<OpenCheck>,
+    loading: bool,
+    /// When the list was last asked for (egui time), to look again now and then.
+    asked: f64,
+}
+
+/// While the tab is open, new screenshots show up within this many seconds.
+const RESCAN_EVERY: f64 = 3.0;
+
+impl ArcticApp {
+    pub(crate) fn screenshots_tab(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette();
+        let now = ui.input(|i| i.time);
+        // Shots taken in game appear on their own, without pressing Refresh.
+        if !self.shots.loading
+            && (self.shots.shots.is_none() || now - self.shots.asked >= RESCAN_EVERY)
+        {
+            self.shots.loading = true;
+            self.shots.asked = now;
+            self.tasks.screenshot_list();
+        }
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_secs_f64(RESCAN_EVERY));
+        crate::widgets::row(ui, |ui| {
+            ui.vertical(|ui| {
+                widgets::page_header(
+                    ui,
+                    p,
+                    crate::i18n::current("Screenshots"),
+                    "From every instance, newest first.",
+                );
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                if widgets::button(ui, p, None, crate::i18n::current("Refresh"), false).clicked() {
+                    self.shots.loading = true;
+                    self.shots.asked = now;
+                    self.tasks.screenshot_list();
+                }
+                self.screenshot_filter(ui);
+            });
+        });
+        let Some(shots) = self.shots.shots.clone() else {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(
+                    RichText::new(crate::i18n::current("Looking for screenshots…")).color(p.muted),
+                );
+            });
+            // An open preview (or its dim backdrop) must never outlive the page drawing it.
+            self.screenshot_preview(ui.ctx());
+            return;
+        };
+        let shown: Vec<&Shot> = shots
+            .iter()
+            .filter(|s| {
+                self.shots
+                    .filter
+                    .as_ref()
+                    .is_none_or(|f| *f == s.instance_id)
+            })
+            .collect();
+        if shown.is_empty() {
+            ui.label(
+                RichText::new(crate::i18n::current(
+                    "No screenshots yet. Press F2 in game to take one.",
+                ))
+                .color(p.muted),
+            );
+            self.screenshot_preview(ui.ctx());
+            return;
+        }
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(10.0, 10.0);
+            for shot in shown {
+                self.thumbnail(ui, shot);
+            }
+        });
+        self.screenshot_preview(ui.ctx());
+    }
+
+    fn screenshot_filter(&mut self, ui: &mut egui::Ui) {
+        let mut names: Vec<(String, String)> =
+            vec![(self.instance.id.clone(), self.instance.name.clone())];
+        names.extend(
+            self.custom_instances
+                .iter()
+                .map(|i| (i.id.clone(), i.name.clone())),
+        );
+        let current = self
+            .shots
+            .filter
+            .as_ref()
+            .and_then(|id| names.iter().find(|(i, _)| i == id))
+            .map_or(
+                crate::i18n::current("All instances").to_owned(),
+                |(_, n)| n.clone(),
+            );
+        egui::ComboBox::from_id_salt("shot_filter")
+            .selected_text(current)
+            .show_ui(ui, |ui| {
+                ui.selectable_value(
+                    &mut self.shots.filter,
+                    None,
+                    crate::i18n::current("All instances"),
+                );
+                for (id, name) in names {
+                    ui.selectable_value(&mut self.shots.filter, Some(id), name);
+                }
+            });
+    }
+
+    fn thumbnail(&mut self, ui: &mut egui::Ui, shot: &Shot) {
+        let response = self.shot_thumb(ui, shot, vec2(THUMB_W, THUMB_H));
+        let response = response
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
+            .on_hover_text(format!("{} · {}", shot.instance_name, when(shot.taken)));
+        if response.clicked() {
+            self.shots.open = Some(shot.clone());
+            self.shots.cell = Some(response.rect);
+            self.shots.motion = Motion::Opening;
+            self.shots.motion_started = ui.input(|i| i.time);
+            self.shots.opened_at = self.shots.motion_started;
+            self.shots.open_check = None;
+        }
+    }
+
+    /// A screenshot's thumbnail at `size` (loaded in the background).
+    pub(crate) fn shot_thumb(
+        &mut self,
+        ui: &mut egui::Ui,
+        shot: &Shot,
+        size: egui::Vec2,
+    ) -> egui::Response {
+        let p = self.palette();
+        let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+        let visible = ui.is_rect_visible(rect);
+        let state = self.shots.thumbs.get(&shot.path).cloned();
+        let loading = self
+            .shots
+            .thumbs
+            .values()
+            .filter(|t| **t == Thumb::Loading)
+            .count();
+        if visible && state.is_none() && loading < MAX_LOADING {
+            self.shots.thumbs.insert(shot.path.clone(), Thumb::Loading);
+            self.tasks.screenshot_thumb(shot.path.clone());
+        }
+        let radius = CornerRadius::same(8);
+        match state {
+            Some(Thumb::Ready(uri)) if visible => {
+                egui::Image::new(uri)
+                    .corner_radius(radius)
+                    .fit_to_exact_size(rect.size())
+                    .paint_at(ui, rect);
+            }
+            _ => {
+                ui.painter().rect_filled(rect, radius, p.surface_hover);
+            }
+        }
+        if response.hovered() {
+            ui.painter().rect_stroke(
+                rect,
+                radius,
+                egui::Stroke::new(2.0, p.accent),
+                egui::StrokeKind::Inside,
+            );
+        }
+        response
+    }
+
+    /// The newest screenshots (listing them first if needed).
+    pub(crate) fn recent_shots(&mut self, n: usize) -> Option<Vec<Shot>> {
+        if self.shots.shots.is_none() && !self.shots.loading {
+            self.shots.loading = true;
+            self.tasks.screenshot_list();
+        }
+        self.shots
+            .shots
+            .as_ref()
+            .map(|l| l.iter().take(n).cloned().collect())
+    }
+
+    /// Whether the open screenshot's picture is ready, still loading, or can't be shown (and
+    /// why). Checked up front for what the GPU can't take (egui panics on a texture bigger than
+    /// the card's limit) and for files that aren't pictures at all.
+    fn preview_load(
+        &mut self,
+        ctx: &egui::Context,
+        path: &std::path::Path,
+        uri: &str,
+        room: egui::Vec2,
+    ) -> Load {
+        if self
+            .shots
+            .open_check
+            .as_ref()
+            .is_none_or(|(p, _)| p != path)
+        {
+            let limit = ctx.input(|i| i.max_texture_side) as u32;
+            let verdict = match image::image_dimensions(path) {
+                Ok((w, h)) if w > limit || h > limit => Err(format!(
+                    "It is {w}×{h}, bigger than this graphics card can show ({limit} pixels a side)."
+                )),
+                Ok(size) => Ok(size),
+                Err(e) => Err(format!("The file can't be read as a picture ({e}).")),
+            };
+            self.shots.open_check = Some((path.to_path_buf(), verdict));
+        }
+        if let Some((_, Err(why))) = &self.shots.open_check {
+            return Load::Failed(why.clone());
+        }
+        match egui::Image::new(uri.to_owned()).load_for_size(ctx, room) {
+            Ok(egui::load::TexturePoll::Ready { .. }) => Load::Ready,
+            Ok(egui::load::TexturePoll::Pending { .. }) => Load::Pending,
+            Err(e) => Load::Failed(e.to_string()),
+        }
+    }
+
+    /// Where the dialog's picture sits: the dialog is centred with its bar below the picture, so the
+    /// picture's middle is half of that extra height above the screen's middle.
+    fn dialog_picture_center(&self, screen: egui::Rect) -> egui::Pos2 {
+        let extra = if self.shots.dialog_extra > 0.0 {
+            self.shots.dialog_extra
+        } else {
+            DEFAULT_DIALOG_EXTRA
+        };
+        screen.center() - vec2(0.0, extra / 2.0)
+    }
+
+    /// How big the picture is drawn in `room`: its own shape (from the file's header, so it is the
+    /// same before and after the picture has loaded), as large as fits. The dialog is sized from
+    /// this, never from `room` itself: an unloaded picture must not leave a window-sized empty frame.
+    fn picture_size(&self, room: egui::Vec2, cell: Option<egui::Rect>) -> egui::Vec2 {
+        let aspect = match &self.shots.open_check {
+            Some((_, Ok((w, h)))) if *w > 0 && *h > 0 => *w as f32 / *h as f32,
+            _ => cell.map_or(16.0 / 9.0, |c| c.width() / c.height().max(1.0)),
+        };
+        fit_aspect(room, aspect)
+    }
+
+    /// "Opening the picture…" while it loads; Esc gives up on it.
+    fn loading_note(&mut self, ctx: &egui::Context) {
+        let p = self.palette();
+        egui::Area::new(Id::new("shot_loading"))
+            .order(egui::Order::Foreground)
+            .anchor(egui::Align2::CENTER_CENTER, vec2(0.0, 0.0))
+            .interactable(false)
+            .show(ctx, |ui| {
+                super::instances::dialog_frame(p).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(
+                            RichText::new(crate::i18n::current("Opening the picture…"))
+                                .color(p.muted),
+                        );
+                    });
+                });
+            });
+        ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+            self.shots.motion = Motion::Settled;
+            self.shots.open = None;
+            self.shots.cell = None;
+        }
+    }
+
+    fn screenshot_preview(&mut self, ctx: &egui::Context) {
+        let Some(shot) = self.shots.open.clone() else {
+            return;
+        };
+        let p = self.palette();
+        let mut close = false;
+        let uri = crate::widgets::file_uri(&shot.path);
+        let room = ctx.content_rect().size() * vec2(0.9, 0.82) - vec2(0.0, 60.0);
+        let mut load = self.preview_load(ctx, &shot.path, &uri, room);
+        let picture = self.picture_size(room, self.shots.cell);
+        let waited = ctx.input(|i| i.time) - self.shots.opened_at;
+        if matches!(load, Load::Pending) && waited > LOAD_GIVE_UP_SECS {
+            load = Load::Failed("It is taking too long to load.".to_owned());
+        }
+        // The picture grows out of its cell only once it can really be drawn. A dim backdrop with
+        // nothing on it (still loading, or unreadable) is what looked like a dark, dead screen.
+        match (&load, self.shots.motion) {
+            (Load::Ready, _) | (_, Motion::Settled) => {}
+            (Load::Pending, Motion::Opening)
+                if ctx.input(|i| i.time) - self.shots.opened_at < LOAD_PATIENCE_SECS =>
+            {
+                // Wait for it without dimming anything.
+                ctx.request_repaint_after(std::time::Duration::from_millis(30));
+                return;
+            }
+            (_, Motion::Closing) => {
+                // Nothing to shrink: just let go of it.
+                self.shots.motion = Motion::Settled;
+                self.shots.open = None;
+                self.shots.cell = None;
+                return;
+            }
+            _ => self.shots.motion = Motion::Settled,
+        }
+        if matches!(load, Load::Pending) {
+            // No dialog (and no dim) for a picture that isn't here yet: a frame sized for it, with
+            // nothing in it, is what a dead screen looks like. A small note says it is coming.
+            self.loading_note(ctx);
+            return;
+        }
+        if matches!(self.shots.motion, Motion::Opening | Motion::Closing)
+            && self.animate_preview(ctx, &uri)
+        {
+            return;
+        }
+        if self.shots.motion == Motion::Handoff {
+            self.handoff_overlay(ctx, &uri);
+        }
+        let mut picture_height = 0.0;
+        let mut content_height = 0.0;
+        let modal = Modal::new(Id::new("shot_preview"))
+            .frame(super::instances::dialog_frame(p))
+            .show(ctx, |ui| {
+                // As large as the window allows (room left for the bar below),
+                // keeping the shot's shape.
+                let (image_width, height) = if let Load::Failed(why) = &load {
+                    // Say what went wrong, in a box about the size of a small picture.
+                    let size = vec2(room.x.min(520.0), room.y.min(260.0));
+                    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+                    ui.painter()
+                        .rect_filled(rect, CornerRadius::same(8), p.surface);
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(rect.shrink(16.0)), |ui| {
+                        ui.vertical_centered(|ui| {
+                            ui.add_space((size.y - 90.0).max(0.0) / 2.0);
+                            ui.label(
+                                RichText::new(crate::i18n::current(
+                                    "Couldn't show this screenshot",
+                                ))
+                                .strong(),
+                            );
+                            ui.add_space(4.0);
+                            ui.add(egui::Label::new(RichText::new(why.as_str()).color(p.muted)));
+                            ui.add_space(4.0);
+                            ui.label(
+                                RichText::new("\"Open\" below may still work.").color(p.muted),
+                            );
+                        });
+                    });
+                    (size.x, size.y)
+                } else {
+                    let view_id = Id::new(("shot_view", &shot.path));
+                    let (mut zoom, mut center): (f32, egui::Vec2) = ui
+                        .data(|d| d.get_temp(view_id))
+                        .filter(|(z, c): &(f32, egui::Vec2)| {
+                            z.is_finite() && *z >= 1.0 && c.x.is_finite() && c.y.is_finite()
+                        })
+                        .unwrap_or((1.0, vec2(0.5, 0.5)));
+                    let half = 0.5 / zoom;
+                    let image = ui.add(
+                        egui::Image::new(uri.clone())
+                            .fit_to_exact_size(picture)
+                            .uv(egui::Rect::from_min_max(
+                                (center - vec2(half, half)).to_pos2(),
+                                (center + vec2(half, half)).to_pos2(),
+                            ))
+                            .corner_radius(CornerRadius::same(8))
+                            .sense(Sense::click_and_drag()),
+                    );
+                    zoom_and_pan(ui, &image, &mut zoom, &mut center);
+                    ui.data_mut(|d| d.insert_temp(view_id, (zoom, center)));
+                    (image.rect.width(), image.rect.height())
+                };
+                picture_height = height;
+                ui.set_max_width(image_width.max(480.0));
+                ui.add_space(8.0);
+                let name = shot
+                    .path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(format!(
+                            "{name} · {} · {}",
+                            shot.instance_name,
+                            when(shot.taken)
+                        ))
+                        .color(p.muted),
+                    )
+                    .truncate(),
+                );
+                ui.add_space(6.0);
+                crate::widgets::row(ui, |ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if widgets::button(ui, p, None, crate::i18n::current("Close"), false)
+                            .clicked()
+                        {
+                            close = true;
+                        }
+                        if widgets::icon_button(
+                            ui,
+                            p,
+                            Icon::Trash,
+                            crate::i18n::current("Delete (moves it to .trash)"),
+                        )
+                        .clicked()
+                        {
+                            match screenshots::trash(&shot) {
+                                Ok(()) => {
+                                    if let Some(list) = &mut self.shots.shots {
+                                        list.retain(|s| s.path != shot.path);
+                                    }
+                                    close = true;
+                                }
+                                Err(e) => self.toasts.push(
+                                    Kind::Error,
+                                    "Couldn't delete it",
+                                    e.to_string(),
+                                ),
+                            }
+                        }
+                        if widgets::icon_button(
+                            ui,
+                            p,
+                            Icon::Folder,
+                            crate::i18n::current("Show in folder"),
+                        )
+                        .clicked()
+                            && let Some(dir) = shot.path.parent()
+                        {
+                            let _ = open::that_detached(dir);
+                        }
+                        if widgets::button(
+                            ui,
+                            p,
+                            Some(Icon::Copy),
+                            crate::i18n::current("Copy image"),
+                            false,
+                        )
+                        .clicked()
+                        {
+                            self.tasks.screenshot_copy(shot.path.clone());
+                        }
+                        if widgets::button(
+                            ui,
+                            p,
+                            Some(Icon::External),
+                            crate::i18n::current("Open"),
+                            true,
+                        )
+                        .clicked()
+                        {
+                            let _ = open::that_detached(&shot.path);
+                        }
+                        self.send_shot_menu(ui, &shot.path);
+                    });
+                });
+                content_height = ui.min_rect().height();
+            });
+        // Remembered for the next opening, so the picture lands where the dialog puts it. (Not the
+        // modal's own rectangle: that one includes the whole-window backdrop.)
+        let extra = content_height + 2.0 * DIALOG_PADDING - picture_height;
+        if picture_height > 0.0 && matches!(load, Load::Ready) && extra > 20.0 {
+            self.shots.dialog_extra = extra;
+        }
+        if close || modal.should_close() {
+            if self.shots.cell.is_some() {
+                self.shots.motion = Motion::Closing;
+                self.shots.motion_started = ctx.input(|i| i.time);
+                ctx.request_repaint();
+            } else {
+                self.shots.open = None;
+            }
+        }
+    }
+
+    /// One frame of the picture growing out of its cell (or shrinking back into it). True while
+    /// it's moving, so the dialog waits.
+    fn animate_preview(&mut self, ctx: &egui::Context, uri: &str) -> bool {
+        let t = ((ctx.input(|i| i.time) - self.shots.motion_started) / MOTION_SECS).clamp(0.0, 1.0);
+        let closing = self.shots.motion == Motion::Closing;
+        let Some(cell) = self.shots.cell else {
+            self.shots.motion = Motion::Settled;
+            return false;
+        };
+        if t >= 1.0 {
+            if closing {
+                self.shots.motion = Motion::Settled;
+                self.shots.open = None;
+                self.shots.cell = None;
+                return true;
+            }
+            // The dialog appears now; the picture stays on top of it while it fades in.
+            self.shots.motion = Motion::Handoff;
+            self.shots.motion_started = ctx.input(|i| i.time);
+            return false;
+        }
+        // Where the dialog's picture ends up: as large as the window allows, in its middle.
+        let screen = ctx.content_rect();
+        let room = screen.size() * vec2(0.9, 0.82) - vec2(0.0, 60.0);
+        let fitted = self.picture_size(room, Some(cell));
+        let target = egui::Rect::from_center_size(self.dialog_picture_center(screen), fitted);
+        let eased = 1.0 - (1.0 - t as f32).powi(3);
+        let progress = if closing { 1.0 - eased } else { eased };
+        let rect = egui::Rect::from_min_max(
+            cell.min.lerp(target.min, progress),
+            cell.max.lerp(target.max, progress),
+        );
+        let dim = (progress * 140.0) as u8;
+        egui::Area::new(Id::new("shot_motion"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(screen.min)
+            .interactable(false)
+            .show(ctx, |ui| {
+                ui.painter()
+                    .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(dim));
+                egui::Image::new(uri.to_owned())
+                    .corner_radius(CornerRadius::same(8))
+                    .fit_to_exact_size(rect.size())
+                    .paint_at(ui, rect);
+            });
+        ctx.request_repaint();
+        true
+    }
+
+    /// The grown picture, fading out over the dialog that is fading in (same size and place, so it
+    /// reads as one thing settling instead of a flash).
+    fn handoff_overlay(&mut self, ctx: &egui::Context, uri: &str) {
+        let h =
+            ((ctx.input(|i| i.time) - self.shots.motion_started) / HANDOFF_SECS).clamp(0.0, 1.0);
+        let Some(cell) = self.shots.cell else {
+            self.shots.motion = Motion::Settled;
+            return;
+        };
+        if h >= 1.0 {
+            self.shots.motion = Motion::Settled;
+            return;
+        }
+        let screen = ctx.content_rect();
+        let room = screen.size() * vec2(0.9, 0.82) - vec2(0.0, 60.0);
+        let fitted = self.picture_size(room, Some(cell));
+        let rect = egui::Rect::from_center_size(self.dialog_picture_center(screen), fitted);
+        let left = 1.0 - h as f32;
+        egui::Area::new(Id::new("shot_handoff"))
+            .order(egui::Order::Tooltip)
+            .fixed_pos(screen.min)
+            .interactable(false)
+            .fade_in(false)
+            .show(ctx, |ui| {
+                ui.painter().rect_filled(
+                    screen,
+                    0.0,
+                    egui::Color32::from_black_alpha((140.0 * left) as u8),
+                );
+                egui::Image::new(uri.to_owned())
+                    .corner_radius(CornerRadius::same(8))
+                    .fit_to_exact_size(rect.size())
+                    .tint(egui::Color32::from_white_alpha((255.0 * left) as u8))
+                    .paint_at(ui, rect);
+            });
+        ctx.request_repaint();
+    }
+
+    pub(crate) fn on_screenshot_list(&mut self, shots: Vec<Shot>) {
+        self.shots.loading = false;
+        // Debug and developer builds: ARCTIC_DEVSHOT_PAGE=shot opens the newest (screenshots).
+        if crate::devshot::enabled()
+            && std::env::var("ARCTIC_DEVSHOT_PAGE").as_deref() == Ok("shot")
+            && self.shots.shots.is_none()
+        {
+            self.shots.open = shots.first().cloned();
+        }
+        self.shots.shots = Some(shots);
+    }
+
+    pub(crate) fn on_screenshot_thumb(
+        &mut self,
+        ctx: &egui::Context,
+        path: PathBuf,
+        png: Result<Vec<u8>, String>,
+    ) {
+        let state = match png {
+            Ok(bytes) => {
+                use std::hash::{Hash, Hasher};
+                let mut h = std::collections::hash_map::DefaultHasher::new();
+                path.hash(&mut h);
+                let uri = format!("bytes://shot/{:016x}.png", h.finish());
+                ctx.include_bytes(uri.clone(), bytes);
+                Thumb::Ready(uri)
+            }
+            Err(_) => Thumb::Failed,
+        };
+        self.shots.thumbs.insert(path, state);
+    }
+
+    pub(crate) fn on_screenshot_copied(&mut self, result: Result<(), String>) {
+        match result {
+            Ok(()) => self.toasts.push(
+                Kind::Success,
+                crate::i18n::current("Copied the screenshot"),
+                "",
+            ),
+            Err(e) => self
+                .toasts
+                .push(Kind::Error, crate::i18n::current("Couldn't copy it"), e),
+        }
+    }
+}
+
+/// The biggest rectangle of shape `aspect` (width over height) that fits in `room`.
+fn fit_aspect(room: egui::Vec2, aspect: f32) -> egui::Vec2 {
+    let room = vec2(room.x.max(1.0), room.y.max(1.0));
+    let aspect = if aspect.is_finite() && aspect > 0.0 {
+        aspect
+    } else {
+        16.0 / 9.0
+    };
+    if room.x / room.y > aspect {
+        vec2(room.y * aspect, room.y)
+    } else {
+        vec2(room.x, room.x / aspect)
+    }
+}
+
+/// Most the picture can be magnified.
+const MAX_ZOOM: f32 = 12.0;
+
+/// Scroll over the picture to zoom into the spot under the pointer, drag to
+/// move around, double-click to see all of it again. `center` is the middle
+/// of what's shown, as a fraction of the whole picture.
+fn zoom_and_pan(ui: &egui::Ui, image: &egui::Response, zoom: &mut f32, center: &mut egui::Vec2) {
+    // A picture with no size yet (a zero-sized window) has nothing to zoom or drag: dividing by
+    // it would leave NaN in the view, and the picture would never draw again.
+    if image.rect.width() < 1.0 || image.rect.height() < 1.0 {
+        return;
+    }
+    if image.double_clicked() {
+        *zoom = 1.0;
+        *center = vec2(0.5, 0.5);
+        return;
+    }
+    let scroll = if image.hovered() {
+        ui.input(|i| i.smooth_scroll_delta.y)
+    } else {
+        0.0
+    };
+    if scroll != 0.0
+        && let Some(pointer) = image.hover_pos()
+    {
+        // The spot under the pointer stays where it is.
+        let rel = (pointer - image.rect.min) / image.rect.size() - vec2(0.5, 0.5);
+        let under = *center + rel / *zoom;
+        *zoom = (*zoom * (scroll * 0.004).exp()).clamp(1.0, MAX_ZOOM);
+        *center = under - rel / *zoom;
+    }
+    if image.dragged() && *zoom > 1.0 {
+        *center -= image.drag_delta() / image.rect.size() / *zoom;
+    }
+    let half = 0.5 / *zoom;
+    *center = center.clamp(vec2(half, half), vec2(1.0 - half, 1.0 - half));
+}
+
+/// "5 min ago", "yesterday", or a date.
+fn when(t: std::time::SystemTime) -> String {
+    let secs = t.elapsed().map_or(0, |d| d.as_secs());
+    match secs {
+        0..60 => "just now".into(),
+        60..3600 => crate::tr_format!("{} min ago", secs / 60),
+        3600..86_400 => crate::tr_format!("{} h ago", secs / 3600),
+        86_400..172_800 => "yesterday".into(),
+        _ => crate::tr_format!("{} days ago", secs / 86_400),
+    }
+}
+
+impl ArcticApp {
+    /// crate::i18n::current("Send to…"): the screenshot to a friend's chat.
+    fn send_shot_menu(&mut self, ui: &mut egui::Ui, path: &std::path::Path) {
+        let friends: Vec<(String, String)> = self
+            .friends_overview()
+            .map(|o| {
+                o.friends
+                    .iter()
+                    .map(|f| (f.id.clone(), f.name.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if friends.is_empty() {
+            return;
+        }
+        let mut picked = None;
+        // As tall as the buttons beside it, or it sits a few pixels off their line.
+        ui.scope(|ui| {
+            ui.spacing_mut().interact_size.y = widgets::BUTTON_HEIGHT;
+            widgets::modal_combo("send_shot")
+                .selected_text(crate::i18n::current("Send to…"))
+                .show_ui(ui, |ui| {
+                    for (id, name) in &friends {
+                        if ui.selectable_label(false, name).clicked() {
+                            picked = Some((id.clone(), name.clone()));
+                        }
+                    }
+                });
+        });
+        if let Some((id, name)) = picked
+            && let Some(account) = self.accounts.active().cloned()
+        {
+            self.tasks.chat_send_image(account, id, path.to_path_buf());
+            self.toasts
+                .push(Kind::Info, format!("Sending to {name}…"), "");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_picture_is_fitted_to_its_own_shape() {
+        let room = vec2(1000.0, 500.0);
+        assert_eq!(fit_aspect(room, 2.0), vec2(1000.0, 500.0));
+        assert_eq!(fit_aspect(room, 1.0), vec2(500.0, 500.0));
+        assert_eq!(fit_aspect(room, 4.0), vec2(1000.0, 250.0));
+        // Nonsense shapes and rooms never give a zero or NaN size.
+        let odd = fit_aspect(vec2(-5.0, 0.0), f32::NAN);
+        assert!(odd.x.is_finite() && odd.y.is_finite() && odd.x > 0.0 && odd.y > 0.0);
+    }
+}

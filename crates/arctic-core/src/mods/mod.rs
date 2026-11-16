@@ -1,0 +1,538 @@
+//! Mods: browsing and installing from Modrinth, and managing an instance's
+//! `mods/` folder.
+//!
+//! Installed Modrinth mods are tracked in `<instance>/mods.json` so the UI
+//! can show titles, icons and versions; jars dropped in by hand are listed
+//! too (untracked). Disabled mods are renamed to `*.jar.disabled`, which is
+//! what loaders ignore.
+
+mod exact;
+mod files;
+mod identify;
+mod index;
+mod local;
+pub mod modpack;
+mod modrinth;
+pub mod pack_groups;
+pub mod packs;
+pub mod performance;
+pub mod polarium;
+mod resolve;
+pub mod retarget;
+pub mod slim_api;
+#[cfg(test)]
+mod tests;
+
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
+use crate::loaders::LoaderKind;
+use crate::net::{DownloadJob, download_all};
+use crate::{Error, Progress, ProgressInfo, Result};
+
+pub use exact::{ExactReport, Skipped, Wanted, install_exact};
+pub use identify::{Recognized, recognize};
+use index::ModIndex;
+pub use local::{LocalImport, import_local};
+
+/// The file names an index of ours tracks (none when it can't be read).
+pub(crate) fn tracked_files(index: &Path) -> Vec<String> {
+    ModIndex::load(index)
+        .map(|i| i.mods.into_iter().map(|m| m.file_name).collect())
+        .unwrap_or_default()
+}
+use modrinth::{Project, Version};
+use resolve::{Planned, Target};
+
+/// How search results are ordered.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SortBy {
+    #[default]
+    Relevance,
+    Downloads,
+    Updated,
+    Newest,
+}
+
+/// What kind of Modrinth project to search for.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ProjectType {
+    #[default]
+    Mod,
+    Modpack,
+    ResourcePack,
+    Shader,
+}
+
+impl ProjectType {
+    pub fn id(self) -> &'static str {
+        match self {
+            ProjectType::Mod => "mod",
+            ProjectType::Modpack => "modpack",
+            ProjectType::ResourcePack => "resourcepack",
+            ProjectType::Shader => "shader",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SearchQuery {
+    pub text: String,
+    pub game_version: String,
+    pub loader: Option<LoaderKind>,
+    pub sort: SortBy,
+    pub offset: usize,
+    pub limit: usize,
+    pub project_type: ProjectType,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectHit {
+    pub project_id: String,
+    pub slug: String,
+    pub title: String,
+    pub description: String,
+    pub author: String,
+    pub downloads: u64,
+    pub icon_url: Option<String>,
+    pub categories: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SearchPage {
+    pub hits: Vec<ProjectHit>,
+    pub total: usize,
+}
+
+/// Project details returned by Modrinth's project endpoint.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ProjectDetail {
+    pub id: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub body: String,
+    #[serde(default)]
+    pub downloads: u64,
+    #[serde(default)]
+    pub icon_url: Option<String>,
+    #[serde(default)]
+    pub game_versions: Vec<String>,
+    #[serde(default)]
+    pub loaders: Vec<String>,
+    #[serde(default)]
+    pub gallery: Vec<GalleryImage>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct GalleryImage {
+    pub url: String,
+    /// Original resolution; `url` can be a small API thumbnail.
+    #[serde(default)]
+    pub raw_url: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub featured: bool,
+    #[serde(default)]
+    pub ordering: i64,
+}
+
+/// Fetch a full project, including its gallery, away from the UI thread.
+pub fn project_detail(id: &str) -> Result<ProjectDetail> {
+    let mut project: ProjectDetail = modrinth::get_api(
+        &format!("{}/project/{}", modrinth::API, modrinth::encode(id)),
+        &format!("project {id}"),
+    )?;
+    project
+        .gallery
+        .sort_by_key(|image| (!image.featured, image.ordering));
+    Ok(project)
+}
+
+/// Gallery images share the URL-keyed disk cache, with a larger download limit.
+pub fn gallery_image(url: &str, cache_dir: &Path) -> Result<Vec<u8>> {
+    files::cached_image(url, cache_dir, 20 * 1024 * 1024)
+}
+
+/// A Modrinth mod installed into an instance (from `mods.json`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstalledMod {
+    pub project_id: String,
+    pub version_id: String,
+    pub title: String,
+    pub version_number: String,
+    pub file_name: String,
+    pub icon_url: Option<String>,
+    /// Installed only because another mod requires it.
+    #[serde(default)]
+    pub dependency: bool,
+}
+
+/// A jar in the mods folder, tracked (installed via Arctic) or not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModFile {
+    /// File name without the `.disabled` suffix.
+    pub file_name: String,
+    pub enabled: bool,
+    pub size: u64,
+    pub tracked: Option<InstalledMod>,
+}
+
+/// Search Modrinth for mods.
+///
+/// `limit` is clamped to 1..=100 (0 means the default of 20). An empty
+/// `game_version` searches all versions; `loader` filters by loader (Quilt
+/// also matches Fabric mods).
+pub fn search(query: &SearchQuery) -> Result<SearchPage> {
+    modrinth::search(query)
+}
+
+/// Install the newest version of `project_id` compatible with the instance
+/// (and its required dependencies) into `mods_dir`. Returns what was
+/// installed. `index` is the instance's `mods.json`.
+///
+/// `project_id` may also be a slug. Dependencies whose project is already
+/// installed are left alone; the requested project itself is always
+/// (re)installed, replacing any other version of it. Everything is resolved
+/// before anything is downloaded, so a missing dependency changes nothing.
+pub fn install(
+    project_id: &str,
+    game_version: &str,
+    loader: LoaderKind,
+    mods_dir: &Path,
+    index: &Path,
+    progress: Progress,
+) -> Result<Vec<InstalledMod>> {
+    progress(ProgressInfo::stage("Resolving dependencies"));
+    let loaders = modrinth::compatible_loaders(loader, game_version);
+    let target = Target {
+        loaders: &loaders,
+        game_version,
+        loader,
+    };
+    let current = ModIndex::load(index)?;
+    let installed = installed_projects(&current, mods_dir);
+    let source = resolve::Modrinth {
+        loaders: &loaders,
+        game_version,
+    };
+    let plan = resolve::resolve(project_id, target, &installed, &source)?;
+    let (mods, jobs) = prepare(&plan, mods_dir)?;
+    let mods = with_project_info(mods);
+
+    download_all("Downloading mods", jobs, progress)?;
+    let updated = record(&current, &mods, mods_dir)?;
+    updated.save(index)?;
+    Ok(mods)
+}
+
+/// A project that couldn't be installed, and why.
+pub type Failed = (String, crate::Error);
+
+/// Install several projects at once: looked up side by side (Modrinth can
+/// take seconds per answer), downloaded together. Returns what was
+/// installed and, for each project that couldn't be, why.
+pub fn install_many(
+    projects: &[&str],
+    game_version: &str,
+    loader: LoaderKind,
+    mods_dir: &Path,
+    index: &Path,
+    progress: Progress,
+) -> Result<(Vec<InstalledMod>, Vec<Failed>)> {
+    progress(ProgressInfo::stage("Finding mods"));
+    let current = ModIndex::load(index)?;
+    let (plan, failed) = plan_many(projects, game_version, loader, &current, mods_dir);
+    if plan.is_empty() {
+        return Ok((Vec::new(), failed));
+    }
+    let (mods, jobs) = prepare(&plan, mods_dir)?;
+    let mods = with_project_info(mods);
+    download_all("Downloading mods", jobs, progress)?;
+    record(&current, &mods, mods_dir)?.save(index)?;
+    Ok((mods, failed))
+}
+
+/// Would [`install_many`] change anything? Looks the projects up without
+/// downloading: `Some(false)` when every one is installed and current,
+/// `None` when Modrinth couldn't be asked about all of them. `present` says
+/// whether a file of the index is there (it may be kept elsewhere for now).
+pub fn updates_waiting(
+    projects: &[&str],
+    game_version: &str,
+    loader: LoaderKind,
+    mods_dir: &Path,
+    index: &Path,
+    present: &dyn Fn(&str) -> bool,
+) -> Result<Option<bool>> {
+    let current = ModIndex::load(index)?;
+    let (plan, failed) = plan_many(projects, game_version, loader, &current, mods_dir);
+    if failed
+        .iter()
+        .any(|(_, e)| matches!(e, crate::Error::Http(_)))
+    {
+        return Ok(None);
+    }
+    // The projects asked for are always planned (each may be an update):
+    // only versions not installed yet are a change.
+    let have = |p: &Planned| {
+        current
+            .mods
+            .iter()
+            .any(|m| m.version_id == p.version.id && present(&m.file_name))
+    };
+    Ok(Some(!plan.iter().all(have)))
+}
+
+/// A newer build of a mod Arctic installed into an instance.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModUpdate {
+    pub project_id: String,
+    pub title: String,
+    /// The installed file.
+    pub file_name: String,
+    /// Its version, and the newer one.
+    pub current: String,
+    pub latest: String,
+}
+
+/// The mods installed through Arctic (and switched on) that have a newer build for this game
+/// version and loader. Asks Modrinth about each mod side by side; mods it can't answer for are left
+/// out. Switched-off mods and mods the player added by hand are not looked at.
+pub fn available_updates(
+    game_version: &str,
+    loader: LoaderKind,
+    mods_dir: &Path,
+    index: &Path,
+) -> Result<Vec<ModUpdate>> {
+    let current = ModIndex::load(index)?;
+    let projects: Vec<&str> = current
+        .mods
+        .iter()
+        .filter(|m| mods_dir.join(&m.file_name).is_file())
+        .map(|m| m.project_id.as_str())
+        .collect();
+    if projects.is_empty() {
+        return Ok(Vec::new());
+    }
+    let (plan, _failed) = plan_many(&projects, game_version, loader, &current, mods_dir);
+    let mut updates: Vec<ModUpdate> = plan
+        .iter()
+        .filter_map(|planned| {
+            let have = current.mods.iter().find(|m| {
+                m.project_id == planned.version.project_id && mods_dir.join(&m.file_name).is_file()
+            })?;
+            (have.version_id != planned.version.id).then(|| ModUpdate {
+                project_id: have.project_id.clone(),
+                title: have.title.clone(),
+                file_name: have.file_name.clone(),
+                current: have.version_number.clone(),
+                latest: planned.version.version_number.clone(),
+            })
+        })
+        .collect();
+    updates.sort_by_key(|u| u.title.to_lowercase());
+    Ok(updates)
+}
+
+/// What installing `projects` would download (looked up side by side), and
+/// the projects that can't be installed, with why.
+fn plan_many(
+    projects: &[&str],
+    game_version: &str,
+    loader: LoaderKind,
+    current: &ModIndex,
+    mods_dir: &Path,
+) -> (Vec<Planned>, Vec<Failed>) {
+    let loaders = modrinth::compatible_loaders(loader, game_version);
+    let target = Target {
+        loaders: &loaders,
+        game_version,
+        loader,
+    };
+    let installed = installed_projects(current, mods_dir);
+    let results: Vec<(String, Result<Vec<Planned>>)> = std::thread::scope(|s| {
+        let handles: Vec<_> = projects
+            .iter()
+            .map(|project| {
+                let installed = &installed;
+                let loaders = &loaders;
+                s.spawn(move || {
+                    let source = resolve::Modrinth {
+                        loaders,
+                        game_version,
+                    };
+                    (
+                        (*project).to_owned(),
+                        resolve::resolve(project, target, installed, &source),
+                    )
+                })
+            })
+            .collect();
+        handles.into_iter().filter_map(|h| h.join().ok()).collect()
+    });
+    let mut failed = Vec::new();
+    let mut plan: Vec<Planned> = Vec::new();
+    for (project, result) in results {
+        match result {
+            Ok(planned) => {
+                for p in planned {
+                    match plan
+                        .iter_mut()
+                        .find(|q| q.version.project_id == p.version.project_id)
+                    {
+                        // Asked for directly somewhere: not just a dependency.
+                        Some(existing) => existing.dependency &= p.dependency,
+                        None => plan.push(p),
+                    }
+                }
+            }
+            Err(e) => failed.push((project, e)),
+        }
+    }
+    (plan, failed)
+}
+
+/// Jars in `mods_dir`, joined with the tracking info from `index`.
+///
+/// Includes disabled (`*.jar.disabled`) files; a missing folder is empty.
+/// Sorted by title (file name for untracked jars), case-insensitively.
+pub fn list(mods_dir: &Path, index: &Path) -> Result<Vec<ModFile>> {
+    let tracked = ModIndex::load(index).unwrap_or_else(|e| {
+        log::warn!("ignoring unreadable {}: {e}", index.display());
+        ModIndex::default()
+    });
+    files::list(mods_dir, &tracked)
+}
+
+/// Enable or disable a mod (renames to/from `.jar.disabled`).
+///
+/// `file_name` may be given with or without the `.disabled` suffix; asking
+/// for the state a mod is already in succeeds without doing anything.
+pub fn set_enabled(mods_dir: &Path, file_name: &str, enabled: bool) -> Result<()> {
+    files::set_enabled(mods_dir, file_name, enabled)
+}
+
+/// Delete a mod file and forget it in `index`.
+///
+/// Deletes both the enabled and the disabled form; a file that is already
+/// gone is not an error.
+pub fn remove(mods_dir: &Path, index: &Path, file_name: &str) -> Result<()> {
+    files::delete(mods_dir, file_name)?;
+    let base = files::base_name(file_name);
+    let current = ModIndex::load(index)?;
+    if current.by_file(base).is_some() {
+        current.without_file(base).save(index)?;
+    }
+    Ok(())
+}
+
+/// Icon bytes for a project (cached under `cache_dir`).
+///
+/// Cached by the SHA-1 of the URL, so repeated calls never hit the network.
+/// Icons over 2 MB are rejected.
+pub fn icon(url: &str, cache_dir: &Path) -> Result<Vec<u8>> {
+    files::icon(url, cache_dir)
+}
+
+/// Path of an instance's mod index.
+pub fn index_path(instance_dir: &Path) -> PathBuf {
+    instance_dir.join("mods.json")
+}
+
+// ---------------------------------------------------------------- helpers
+
+/// Projects in the index whose file is still in the mods folder.
+fn installed_projects(index: &ModIndex, mods_dir: &Path) -> HashSet<String> {
+    index
+        .mods
+        .iter()
+        .filter(|m| files::exists(mods_dir, &m.file_name))
+        .map(|m| m.project_id.clone())
+        .collect()
+}
+
+/// Index entries (titles still unknown) and download jobs for a plan.
+fn prepare(plan: &[Planned], mods_dir: &Path) -> Result<(Vec<InstalledMod>, Vec<DownloadJob>)> {
+    plan.iter()
+        .map(|p| prepare_one(&p.version, p.dependency, mods_dir))
+        .collect::<Result<Vec<_>>>()
+        .map(|pairs| pairs.into_iter().unzip())
+}
+
+fn prepare_one(
+    version: &Version,
+    dependency: bool,
+    mods_dir: &Path,
+) -> Result<(InstalledMod, DownloadJob)> {
+    let file = version
+        .primary_file()
+        .ok_or_else(|| Error::Other(format!("version {} has no files", version.id)))?;
+    files::check_file_name(&file.filename)?;
+    let entry = InstalledMod {
+        project_id: version.project_id.clone(),
+        version_id: version.id.clone(),
+        title: version.project_id.clone(),
+        version_number: version.version_number.clone(),
+        file_name: file.filename.clone(),
+        icon_url: None,
+        dependency,
+    };
+    let job = DownloadJob {
+        url: file.url.clone(),
+        dest: mods_dir.join(&file.filename),
+        sha1: file.hashes.sha1.clone(),
+        size: file.size,
+        lzma: None,
+    };
+    Ok((entry, job))
+}
+
+/// Fill in titles and icons with one batch request. Cosmetic: on failure
+/// the project id stays as the title.
+fn with_project_info(mods: Vec<InstalledMod>) -> Vec<InstalledMod> {
+    let ids: Vec<&str> = mods.iter().map(|m| m.project_id.as_str()).collect();
+    match modrinth::projects(&ids) {
+        Ok(projects) => apply_project_info(mods, &projects),
+        Err(e) => {
+            log::warn!("could not fetch mod titles: {e}");
+            mods
+        }
+    }
+}
+
+fn apply_project_info(mods: Vec<InstalledMod>, projects: &[Project]) -> Vec<InstalledMod> {
+    let by_id: HashMap<&str, &Project> = projects.iter().map(|p| (p.id.as_str(), p)).collect();
+    mods.into_iter()
+        .map(|m| match by_id.get(m.project_id.as_str()) {
+            Some(p) if !p.title.trim().is_empty() => InstalledMod {
+                title: p.title.clone(),
+                icon_url: modrinth::non_empty(p.icon_url.clone()),
+                ..m
+            },
+            _ => m,
+        })
+        .collect()
+}
+
+/// The index after installing `mods`. Older files of the same projects are
+/// deleted, as is a stale disabled copy of the very same file.
+fn record(current: &ModIndex, mods: &[InstalledMod], mods_dir: &Path) -> Result<ModIndex> {
+    let mut updated = current.clone();
+    for m in mods {
+        if let Some(old) = current.by_project(&m.project_id) {
+            if old.file_name == m.file_name {
+                files::delete_disabled_copy(mods_dir, &m.file_name)?;
+            } else {
+                files::delete(mods_dir, &old.file_name)?;
+            }
+        }
+        updated = updated.with(m.clone());
+    }
+    Ok(updated)
+}

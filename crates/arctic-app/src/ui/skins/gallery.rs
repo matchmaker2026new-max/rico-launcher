@@ -1,0 +1,432 @@
+//! The community skin gallery inside the Cosmetics tab: browse, wear with a
+//! click (it's added to your library too), add or report from the
+//! right-click menu; and share your own skins.
+
+use std::collections::HashMap;
+
+use arctic_core::cosmetics::{GalleryItem, GallerySort};
+use eframe::egui::{self, RichText, vec2};
+
+use crate::app::ArcticApp;
+use crate::gallery_tasks::GalleryResult;
+use crate::tasks::Event;
+use crate::toasts::Kind;
+use crate::widgets;
+
+const SEARCH_DELAY: f64 = 0.35;
+const COLLECTIONS: [(&str, &str); 9] = [
+    ("", "All"),
+    ("adventure", "Adventure"),
+    ("fantasy", "Fantasy"),
+    ("gamer", "Gamer"),
+    ("animals", "Animals"),
+    ("pvp", "PvP"),
+    ("casual", "Casual"),
+    ("minecraft", "Minecraft"),
+    ("community", "Community"),
+];
+
+#[derive(Default)]
+pub struct GalleryUi {
+    pub query: String,
+    pub sort: GallerySort,
+    pub category: &'static str,
+    request: u64,
+    pub loading: bool,
+    pub page: Option<Result<Vec<GalleryItem>, String>>,
+    /// How many skins match in all (more pages in as you scroll).
+    pub total: i64,
+    /// Texture hash → PNG for the listed skins.
+    pub pngs: HashMap<String, Vec<u8>>,
+    typed_at: Option<f64>,
+    pub busy: bool,
+    /// A library skin about to be shared, and the name typed for it (asked first: no random file names).
+    naming: Option<(arctic_core::skins::SkinEntry, String)>,
+}
+
+impl GalleryUi {
+    /// Let go of the downloaded skins: the next visit lists them again.
+    pub fn release(&mut self) {
+        self.pngs = HashMap::new();
+        self.page = None;
+        self.total = 0;
+        self.loading = false;
+        // An answer still on its way is for the old request.
+        self.request += 1;
+    }
+}
+
+impl ArcticApp {
+    /// The search box and sort, which stay put while the skins scroll.
+    pub(super) fn gallery_header(&mut self, ui: &mut egui::Ui) {
+        if self.skins.gallery.page.is_none() && !self.skins.gallery.loading {
+            self.run_gallery_search();
+        }
+        let mut search = false;
+        ui.horizontal(|ui| {
+            let field = ui.add(
+                widgets::text_field(&mut self.skins.gallery.query)
+                    .hint_text(crate::i18n::current("Search skins or creators"))
+                    .desired_width(240.0),
+            );
+            let now = ui.input(|i| i.time);
+            if field.changed() {
+                self.skins.gallery.typed_at = Some(now);
+            }
+            if let Some(at) = self.skins.gallery.typed_at {
+                if now - at >= SEARCH_DELAY {
+                    search = true;
+                } else {
+                    ui.ctx()
+                        .request_repaint_after(std::time::Duration::from_secs_f64(
+                            SEARCH_DELAY - (now - at),
+                        ));
+                }
+            }
+            let before = self.skins.gallery.sort;
+            ui.selectable_value(
+                &mut self.skins.gallery.sort,
+                GallerySort::Popular,
+                crate::i18n::current("Popular"),
+            );
+            ui.selectable_value(
+                &mut self.skins.gallery.sort,
+                GallerySort::New,
+                crate::i18n::current("New"),
+            );
+            search |= self.skins.gallery.sort != before;
+            if self.skins.gallery.loading {
+                ui.spinner();
+            }
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            for (key, label) in COLLECTIONS {
+                if ui
+                    .selectable_label(
+                        self.skins.gallery.category == key,
+                        crate::i18n::current(label),
+                    )
+                    .clicked()
+                    && self.skins.gallery.category != key
+                {
+                    self.skins.gallery.category = key;
+                    search = true;
+                }
+            }
+        });
+        if search {
+            self.skins.gallery.typed_at = None;
+            self.run_gallery_search();
+        }
+        ui.add_space(8.0);
+    }
+
+    /// The skins themselves (the part that scrolls).
+    pub(super) fn gallery_body(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette();
+        let items = match &self.skins.gallery.page {
+            None => return,
+            Some(Err(e)) => {
+                ui.label(RichText::new(e).color(p.muted));
+                return;
+            }
+            Some(Ok(items)) if items.is_empty() => {
+                ui.label(
+                    RichText::new(crate::i18n::current(
+                        "No skins match this collection and search.",
+                    ))
+                    .color(p.muted),
+                );
+                return;
+            }
+            Some(Ok(items)) => items.clone(),
+        };
+        let can_wear = self.arctic_state().is_some() && !self.skins.gallery.busy;
+        let trying = match &self.skins.trying.skin {
+            Some(Some((key, _))) => Some(key.clone()),
+            _ => None,
+        };
+        let mut wear: Option<GalleryItem> = None;
+        let mut blocked = false;
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(10.0, 10.0);
+            for item in &items {
+                let key = format!("gal:{}", item.texture);
+                let worn = trying.as_deref() == Some(key.as_str());
+                let tile = self
+                    .skin_tile(ui, &key, &item.name, Some(item.variant()), worn)
+                    .on_hover_text(if self.settings.language.is_rtl() {
+                        crate::i18n::text_owned(
+                            self.settings.language,
+                            format!("بواسطة {} · استُخدم {} مرة", item.author, item.downloads),
+                        )
+                    } else {
+                        format!("by {} · used {} times", item.author, item.downloads)
+                    });
+                if tile.clicked() && !worn {
+                    if can_wear {
+                        wear = Some(item.clone());
+                    } else if !self.skins.gallery.busy {
+                        blocked = true;
+                    }
+                }
+                tile.context_menu(|ui| self.gallery_menu(ui, item));
+            }
+        });
+        // More skins come in as the end scrolls into view.
+        if (items.len() as i64) < self.skins.gallery.total {
+            let (end, _) =
+                ui.allocate_exact_size(vec2(ui.available_width(), 34.0), egui::Sense::hover());
+            if ui.is_rect_visible(end) {
+                ui.put(end, egui::Spinner::new());
+                self.load_more_gallery();
+            }
+        }
+        ui.add_space(6.0);
+        ui.label(
+            RichText::new(if self.settings.language.is_rtl() {
+                crate::i18n::text_owned(
+                    self.settings.language,
+                    format!("{} مظهر. انقر على أحدها لارتدائه (وسيُحفظ في مكتبتك). انقر بزر الفأرة الأيمن للمزيد.", self.skins.gallery.total.max(items.len() as i64)),
+                )
+            } else {
+                format!("{} skins. Click one to wear it (it's saved to your library). Right-click for more.", self.skins.gallery.total.max(items.len() as i64))
+            })
+            .small()
+            .color(p.muted),
+        );
+        if let Some(item) = wear {
+            // Shown at once; worn for real once it's in the library.
+            let key = format!("gal:{}", item.texture);
+            self.skins.trying.skin = Some(Some((key, item.variant())));
+            self.skins.gallery.busy = true;
+            self.tasks.gallery_take(item, true);
+        }
+        if blocked {
+            self.explain_wear_blocked();
+        }
+    }
+
+    fn run_gallery_search(&mut self) {
+        let g = &mut self.skins.gallery;
+        g.request += 1;
+        g.loading = true;
+        g.page = None;
+        g.total = 0;
+        self.tasks.gallery_search(
+            g.request,
+            g.sort,
+            g.query.trim().to_owned(),
+            g.category.to_owned(),
+            0,
+        );
+    }
+
+    /// The next page of the same search.
+    fn load_more_gallery(&mut self) {
+        let g = &mut self.skins.gallery;
+        let Some(Ok(items)) = &g.page else {
+            return;
+        };
+        if g.loading {
+            return;
+        }
+        let offset = items.len();
+        g.request += 1;
+        g.loading = true;
+        self.tasks.gallery_search(
+            g.request,
+            g.sort,
+            g.query.trim().to_owned(),
+            g.category.to_owned(),
+            offset,
+        );
+    }
+
+    /// A gallery skin's right-click menu.
+    fn gallery_menu(&mut self, ui: &mut egui::Ui, item: &GalleryItem) {
+        let busy = self.skins.gallery.busy;
+        if ui
+            .add_enabled(
+                !busy,
+                egui::Button::new(crate::i18n::current("Add to library")),
+            )
+            .clicked()
+        {
+            self.skins.gallery.busy = true;
+            self.tasks.gallery_take(item.clone(), false);
+            ui.close();
+        }
+        if let Some(account) = self.accounts.active().cloned()
+            && ui
+                .button(crate::i18n::current("Report this skin"))
+                .clicked()
+        {
+            self.tasks.gallery_report(account, item.id.clone());
+            ui.close();
+        }
+    }
+
+    /// crate::i18n::current("Share to gallery") for a library skin; true when clicked.
+    pub(super) fn share_button(
+        &mut self,
+        ui: &mut egui::Ui,
+        entry: &arctic_core::skins::SkinEntry,
+    ) -> bool {
+        if self.accounts.active().is_none() {
+            return false;
+        }
+        let enabled = self.arctic_state().is_some() && !self.skins.gallery.busy;
+        let share = ui
+            .add_enabled(
+                enabled,
+                egui::Button::new(crate::i18n::current("Share to gallery")),
+            )
+            .on_hover_text(crate::i18n::current(
+                "Everyone can find and use it in the RICO gallery",
+            ));
+        if share.clicked() {
+            // The name is asked for first; a name that already is a real one is offered as it is.
+            let start = if arctic_core::skins::name_problem(&entry.name).is_none() {
+                entry.name.clone()
+            } else {
+                String::new()
+            };
+            self.skins.gallery.naming = Some((entry.clone(), start));
+            return true;
+        }
+        false
+    }
+
+    /// crate::i18n::current("Name your skin"): the gallery shows what you type here, so it has to be a real name.
+    pub(crate) fn gallery_name_dialog(&mut self, ctx: &egui::Context) {
+        let Some((entry, mut text)) = self.skins.gallery.naming.clone() else {
+            return;
+        };
+        let Some(account) = self.accounts.active().cloned() else {
+            self.skins.gallery.naming = None;
+            return;
+        };
+        let p = self.palette();
+        let problem = arctic_core::skins::name_problem(&text);
+        let mut share = false;
+        let mut cancel = false;
+        let modal = egui::Modal::new(egui::Id::new("gallery_name"))
+            .frame(crate::ui::dialogs::dialog_frame(p))
+            .show(ctx, |ui| {
+                ui.set_width(380.0);
+                ui.label(RichText::new(crate::i18n::current("Name your skin")).size(20.0).strong());
+                ui.label(
+                    RichText::new(
+                        "Everyone sees this name in the gallery. Pick one that says what the skin is, like \"Ice Knight\".",
+                    )
+                    .color(p.muted),
+                );
+                ui.add_space(10.0);
+                let field = ui.add(
+                    widgets::text_field(&mut text)
+                        .hint_text(crate::i18n::current("Skin name"))
+                        .char_limit(32)
+                        .desired_width(f32::INFINITY),
+                );
+                field.request_focus();
+                if !text.trim().is_empty()
+                    && let Some(why) = problem
+                {
+                    ui.add_space(4.0);
+                    ui.label(RichText::new(why).small().color(p.warn));
+                }
+                ui.add_space(12.0);
+                widgets::row(ui, |ui| {
+                    if widgets::button(ui, p, None, crate::i18n::current("Cancel"), false).clicked() {
+                        cancel = true;
+                    }
+                    let ok = problem.is_none();
+                    let go = ui
+                        .add_enabled_ui(ok, |ui| widgets::button(ui, p, None, crate::i18n::current("Share"), true))
+                        .inner;
+                    if go.clicked()
+                        || (ok && field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                    {
+                        share = true;
+                    }
+                });
+            });
+        if cancel || modal.should_close() {
+            self.skins.gallery.naming = None;
+            return;
+        }
+        if share {
+            self.skins.gallery.naming = None;
+            if let Ok(png) = arctic_core::skins::Library::read_png(&self.skins_dir(), &entry.id) {
+                self.skins.gallery.busy = true;
+                self.tasks
+                    .gallery_share(account, png, entry.variant, text.trim().to_owned());
+            }
+            return;
+        }
+        if let Some(open) = &mut self.skins.gallery.naming {
+            open.1 = text;
+        }
+    }
+
+    pub(super) fn on_gallery_event(&mut self, event: Event) {
+        let g = &mut self.skins.gallery;
+        match event {
+            Event::Gallery(request, result) if request == g.request => {
+                g.loading = false;
+                match result {
+                    Ok(GalleryResult {
+                        offset,
+                        page,
+                        textures,
+                    }) => {
+                        g.pngs.extend(textures);
+                        g.total = page.total;
+                        match &mut g.page {
+                            // The next page of what is shown: it goes on the end.
+                            Some(Ok(items)) if offset > 0 && offset == items.len() => {
+                                items.extend(page.items);
+                            }
+                            _ => g.page = Some(Ok(page.items)),
+                        }
+                    }
+                    Err(e) => g.page = Some(Err(e)),
+                }
+            }
+            Event::GalleryTaken(result) => {
+                g.busy = false;
+                match result {
+                    Ok((name, png, variant, wear)) => {
+                        let entry = self.add_skin(&name, &png, Some(variant));
+                        if wear && let Some(entry) = entry {
+                            self.wear_skin(&entry);
+                        }
+                    }
+                    Err(e) => {
+                        self.skins.trying.skin = None;
+                        self.toasts.push(
+                            Kind::Error,
+                            crate::i18n::current("Could not get skin"),
+                            e,
+                        );
+                    }
+                }
+            }
+            Event::GalleryDone(result) => {
+                g.busy = false;
+                match result {
+                    Ok(message) => {
+                        self.toasts.push(Kind::Success, message, "");
+                        g.page = None;
+                    }
+                    Err(e) => self
+                        .toasts
+                        .push(Kind::Error, crate::i18n::current("Gallery"), e),
+                }
+            }
+            _ => {}
+        }
+    }
+}

@@ -1,0 +1,315 @@
+package com.arcticlauncher.client.menu;
+
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+
+import com.arcticlauncher.client.ArcticClient;
+import com.arcticlauncher.client.ui.KeyButton;
+import com.arcticlauncher.client.ui.Label;
+import com.arcticlauncher.client.ui.Scroll;
+import com.arcticlauncher.client.ui.Toggle;
+import com.arcticlauncher.client.ui.Widget;
+
+/**
+ * A settings tab laid out top to bottom in a scrolling box: sections,
+ * switches (some with a key), key rows, notes and custom rows. Every change
+ * is saved right away.
+ */
+final class Form {
+	static final int ROW = 24;
+	static final int KEY_W = 76;
+	private static final int SECTION_H = 16;
+	private static final int SECTION_GAP = 8;
+	private static final int NOTE_H = 11;
+	private static final int SCROLLBAR = 6;
+
+	private final Host host;
+	private final Scroll scroll;
+	final int x;
+	final int w;
+	private int y;
+	private boolean first = true;
+
+	Form(Host host, int x, int top, int w, int bottom) {
+		this.host = host;
+		this.x = x;
+		// Room on the right for the scroll bar.
+		this.w = w - SCROLLBAR;
+		this.y = top;
+		this.scroll = host.scroll(x, top, x + w - SCROLLBAR + 2, bottom);
+	}
+
+	Scroll scroll() {
+		return scroll;
+	}
+
+	/** Where the next row starts (unscrolled). */
+	int y() {
+		return y;
+	}
+
+	/** Place a widget (unscrolled coordinates). */
+	<T extends Widget> T put(T widget, int wx, int wy, int ww, int wh) {
+		widget.bounds(wx, wy, ww, wh);
+		host.add(widget);
+		return scroll.add(widget);
+	}
+
+	/** Take a row of {@code h} pixels; returns its top. */
+	int row(int h) {
+		int top = y;
+		y += h;
+		first = false;
+		return top;
+	}
+
+	void gap(int h) {
+		y += h;
+	}
+
+	void section(String title) {
+		if (!first) {
+			y += SECTION_GAP;
+		}
+		put(new Label(title, Label.Kind.SECTION), x, y, w, SECTION_H);
+		y += SECTION_H + 4;
+		first = false;
+	}
+
+	/** A muted line of explanation. */
+	void note(String text) {
+		put(new Label(text, Label.Kind.MUTED), x + 4, row(NOTE_H), w - 4, NOTE_H);
+	}
+
+	Toggle toggle(String name, String hint, BooleanSupplier get, Consumer<Boolean> set) {
+		return put(new Toggle(name, hint, binding(get, set)), x, row(ROW), w, ROW);
+	}
+
+	/** A switch with the key that also switches it (or that you hold). */
+	void toggleKey(String name, String hint, BooleanSupplier get, Consumer<Boolean> set, KeyButton.Binding key) {
+		int top = row(ROW);
+		put(new Toggle(name, hint, binding(get, set)), x, top, w - KEY_W - 6, ROW);
+		keyButton(key, top);
+	}
+
+	/** Just a key: its name and what it does, and the key button. */
+	void key(String name, String hint, KeyButton.Binding key) {
+		int top = row(ROW);
+		put(new Label(name, Label.Kind.TEXT), x + 4, top + 3, w - KEY_W - 10, 9);
+		put(new Label(hint, Label.Kind.MUTED), x + 4, top + 13, w - KEY_W - 10, 9);
+		keyButton(key, top);
+	}
+
+	private void keyButton(final KeyButton.Binding key, int top) {
+		KeyButton button = put(new KeyButton(new KeyButton.Binding() {
+			@Override
+			public String get() {
+				return key.get();
+			}
+
+			@Override
+			public void set(String k) {
+				key.set(k);
+				ArcticClient.saveConfig();
+			}
+		}), x + w - KEY_W, top + 3, KEY_W, ROW - 6);
+		host.listenKeys(button);
+	}
+
+	private static final int LABEL_W = 96;
+	private static final int SWATCH = 12;
+	private static final int SWATCH_GAP = 5;
+	private static final int CHOICE_H = 16;
+	private static final int STEP_BTN = 16;
+	private static final int STEP_VALUE_W = 36;
+
+	private void rowLabel(int top, String text) {
+		put(new Label(text, Label.Kind.TEXT), x + 4, top, LABEL_W - 4, ROW);
+	}
+
+	/** The swatch row whose free color picker is open (one at a time), and the color it holds. */
+	private static String openPicker;
+	private static final float[] PICKER_HSV = new float[3];
+	private static final int HEX_W = 64;
+	private static final com.arcticlauncher.client.ui.TextField.Filter HEX = new com.arcticlauncher.client.ui.TextField.Filter() {
+		@Override
+		public boolean accepts(int c) {
+			return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+		}
+	};
+
+	/** "Label   ■ ■ ■ ■ ◐": pick one color, or open the picker for any other; the chosen one gets a ring. */
+	void swatches(final String label, int[] colors, final java.util.function.IntSupplier get, final java.util.function.IntConsumer set) {
+		int top = row(ROW);
+		rowLabel(top, label);
+		int sx = x + LABEL_W;
+		boolean preset = false;
+		for (final int color : colors) {
+			preset |= get.getAsInt() == color;
+			put(new Swatch(color, get.getAsInt() == color, () -> {
+				set.accept(color);
+				openPicker = null;
+				ArcticClient.saveConfig();
+				host.rebuild();
+			}), sx, top + (ROW - SWATCH) / 2, SWATCH, SWATCH);
+			sx += SWATCH + SWATCH_GAP;
+		}
+		final boolean open = label.equals(openPicker);
+		final boolean custom = !preset;
+		put(new CustomSwatch(get::getAsInt, () -> custom, open, () -> {
+			openPicker = open ? null : label;
+			ColorPicker.toHsv(get.getAsInt(), PICKER_HSV);
+			host.rebuild();
+		}), sx, top + (ROW - SWATCH) / 2, SWATCH, SWATCH);
+		if (open) {
+			picker(get, set);
+		}
+	}
+
+	/** The free color picker under a swatch row: the square and strip, and the color as hex. */
+	private void picker(final java.util.function.IntSupplier get, final java.util.function.IntConsumer set) {
+		// A stale hue (another color was chosen since): start from the color the row holds now.
+		if ((ColorPicker.rgb(PICKER_HSV[0], PICKER_HSV[1], PICKER_HSV[2]) & 0xFFFFFF) != (get.getAsInt() & 0xFFFFFF)) {
+			ColorPicker.toHsv(get.getAsInt(), PICKER_HSV);
+		}
+		int pickerTop = row(ColorPicker.HEIGHT + 6);
+		final int left = x + LABEL_W;
+		final int hexTop = row(ROW);
+		put(new Label("Hex", Label.Kind.TEXT), x + 4, hexTop, LABEL_W - 4, ROW);
+		final com.arcticlauncher.client.ui.TextField hex = new com.arcticlauncher.client.ui.TextField("RRGGBB", 6, HEX)
+				.text(hexOf(get.getAsInt()));
+		put(new ColorPicker(PICKER_HSV, () -> {
+			set.accept(ColorPicker.rgb(PICKER_HSV[0], PICKER_HSV[1], PICKER_HSV[2]));
+			hex.text(hexOf(get.getAsInt()));
+		}, () -> {
+			ArcticClient.saveConfig();
+			host.rebuild();
+		}), left, pickerTop + 2, Math.min(w - LABEL_W, 180), ColorPicker.HEIGHT);
+		hex.onChange(() -> {
+			String typed = hex.text();
+			if (typed.length() == 6) {
+				int rgb = 0xFF000000 | Integer.parseInt(typed, 16);
+				ColorPicker.toHsv(rgb, PICKER_HSV);
+				set.accept(rgb);
+				ArcticClient.saveConfig();
+			}
+		});
+		put(hex, left, hexTop + 4, HEX_W, ROW - 8);
+	}
+
+	private static String hexOf(int argb) {
+		return String.format(java.util.Locale.ROOT, "%06X", argb & 0xFFFFFF);
+	}
+
+	/** "Label   [One] [Two] [Three]": pick one option. */
+	void choice(String label, String[] options, final java.util.function.IntSupplier get, final java.util.function.IntConsumer set) {
+		int top = row(ROW);
+		rowLabel(top, label);
+		int bw = (w - LABEL_W) / options.length;
+		for (int i = 0; i < options.length; i++) {
+			final int index = i;
+			put(new com.arcticlauncher.client.ui.Button(options[i], () -> {
+				set.accept(index);
+				ArcticClient.saveConfig();
+				host.rebuild();
+			}).selected(get.getAsInt() == i), x + LABEL_W + i * bw, top + (ROW - CHOICE_H) / 2, bw - 2, CHOICE_H);
+		}
+	}
+
+	/** "Label        -  1.2  +": a number in steps, shown with {@code format}. */
+	void stepper(String label, final java.util.function.DoubleSupplier get, final java.util.function.DoubleConsumer set,
+			final double min, final double max, final double step, final String format) {
+		int top = row(ROW);
+		rowLabel(top, label);
+		int right = x + w;
+		int by = top + (ROW - STEP_BTN) / 2;
+		final Label value = new Label(String.format(java.util.Locale.ROOT, format, get.getAsDouble()), Label.Kind.TEXT);
+		put(new com.arcticlauncher.client.ui.Button("-", () -> {
+			set.accept(Math.max(min, Math.round((get.getAsDouble() - step) / step) * step));
+			value.text(String.format(java.util.Locale.ROOT, format, get.getAsDouble()));
+			ArcticClient.saveConfig();
+		}), right - STEP_BTN * 2 - STEP_VALUE_W, by, STEP_BTN, STEP_BTN);
+		put(value, right - STEP_BTN - STEP_VALUE_W + 8, top, STEP_VALUE_W - 8, ROW);
+		put(new com.arcticlauncher.client.ui.Button("+", () -> {
+			set.accept(Math.min(max, Math.round((get.getAsDouble() + step) / step) * step));
+			value.text(String.format(java.util.Locale.ROOT, format, get.getAsDouble()));
+			ArcticClient.saveConfig();
+		}), right - STEP_BTN, by, STEP_BTN, STEP_BTN);
+	}
+
+	/** "Label   [Button]": runs {@code run} when pressed. */
+	void action(String label, String text, Runnable run) {
+		int top = row(ROW);
+		rowLabel(top, label);
+		put(new com.arcticlauncher.client.ui.Button(text, run), x + LABEL_W, top + (ROW - CHOICE_H) / 2, 64, CHOICE_H);
+	}
+
+	/** "Label   ----o----   35%": a number on a track, set by click or drag. */
+	void slider(String label, final java.util.function.DoubleSupplier get, final java.util.function.DoubleConsumer set, double min,
+			double max, double step, final String format) {
+		int top = row(ROW);
+		rowLabel(top, label);
+		int right = x + w;
+		final Label value = new Label(String.format(java.util.Locale.ROOT, format, get.getAsDouble()), Label.Kind.TEXT);
+		put(new SliderBar(get, set, min, max, step,
+				() -> value.text(String.format(java.util.Locale.ROOT, format, get.getAsDouble())),
+				ArcticClient::saveConfig), x + LABEL_W, top, right - x - LABEL_W - STEP_VALUE_W - 8, ROW);
+		put(value, right - STEP_VALUE_W, top, STEP_VALUE_W, ROW);
+	}
+
+	/** "Label     <  Sword  >": one of many options, stepped through (too many for {@link #choice}). */
+	void cycle(String label, final String[] options, final java.util.function.IntSupplier get,
+			final java.util.function.IntConsumer set) {
+		int top = row(ROW);
+		rowLabel(top, label);
+		int left = x + LABEL_W;
+		int right = x + w;
+		int by = top + (ROW - STEP_BTN) / 2;
+		final Label value = new Label(options[Math.floorMod(get.getAsInt(), options.length)], Label.Kind.TEXT);
+		put(new com.arcticlauncher.client.ui.Button("<", () -> step(options, get, set, -1)), left, by, STEP_BTN, STEP_BTN);
+		put(value, left + STEP_BTN + 8, top, right - left - STEP_BTN * 2 - 16, ROW);
+		put(new com.arcticlauncher.client.ui.Button(">", () -> step(options, get, set, 1)), right - STEP_BTN, by, STEP_BTN, STEP_BTN);
+	}
+
+	private void step(String[] options, java.util.function.IntSupplier get, java.util.function.IntConsumer set, int by) {
+		set.accept(Math.floorMod(get.getAsInt() + by, options.length));
+		ArcticClient.saveConfig();
+		host.rebuild();
+	}
+
+	/** Call last: sets how far the box scrolls. */
+	void done() {
+		scroll.extendTo(y);
+		scroll.settle();
+	}
+
+	/** A key binding on a config field. */
+	static KeyButton.Binding key(final java.util.function.Supplier<String> get, final java.util.function.Consumer<String> set) {
+		return new KeyButton.Binding() {
+			@Override
+			public String get() {
+				return get.get();
+			}
+
+			@Override
+			public void set(String k) {
+				set.accept(k);
+			}
+		};
+	}
+
+	static Toggle.Binding binding(final BooleanSupplier get, final Consumer<Boolean> set) {
+		return new Toggle.Binding() {
+			@Override
+			public boolean get() {
+				return get.getAsBoolean();
+			}
+
+			@Override
+			public void set(boolean on) {
+				set.accept(on);
+				ArcticClient.saveConfig();
+			}
+		};
+	}
+}

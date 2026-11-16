@@ -1,0 +1,65 @@
+RICO SOURCE-AVAILABLE RESTRICTED LICENSE
+Version 1.0 — 2026-11-16
+
+Copyright (c) 2026 RICO contributors.
+
+IMPORTANT: This is a source-available license. It is not an Open Source license as defined by the Open Source Initiative. The RICO name, logos, artwork, service names, and trademarks are not licensed by this document.
+
+1. Definitions
+
+"Software" means the source code, documentation, assets, scripts, and other materials in this repository that are identified as being covered by this license.
+
+"Copyright Holder" means the copyright owner(s) identified in the repository notices or in the relevant file headers.
+
+"You" means the person or entity exercising a permission under this license.
+
+2. Limited grant
+
+Subject to the conditions below, the Copyright Holder grants you a personal, worldwide, non-exclusive, non-transferable, revocable license to:
+
+(a) view and study the Software;
+(b) build and run the unmodified Software for your own personal, non-commercial use;
+(c) make private modifications for your own personal, non-commercial use; and
+(d) make a private backup copy for those purposes.
+
+No rights are granted except those expressly stated in this license.
+
+3. Prohibited uses
+
+Without prior written permission from the Copyright Holder, you may not:
+
+(a) sell, rent, lease, sublicense, or otherwise commercially exploit the Software;
+(b) distribute, publish, mirror, upload, or make available any copy of the Software, whether modified or unmodified;
+(c) publish or maintain a public fork or derivative work;
+(d) provide the Software as a hosted, managed, SaaS, or service-bureau offering;
+(e) incorporate the Software into another product or service;
+(f) use the Software to operate a competing launcher, client, platform, or service;
+(g) remove, alter, or obscure copyright, license, attribution, or legal notices;
+(h) use the RICO name, logos, artwork, or other marks to imply endorsement, affiliation, or official status; or
+(i) use the Software to circumvent access controls, authentication, licensing, server rules, or the terms of any third-party service.
+
+4. Contributions
+
+Unless the Copyright Holder agrees otherwise in writing, any contribution submitted to this repository is provided under this license and must be submitted by a person who has the right to grant these permissions. A contribution does not grant permission to use the RICO name or trademarks.
+
+5. Third-party materials
+
+This license does not replace or override the licenses of third-party dependencies, assets, services, or code. Those materials remain subject to their own licenses. You are responsible for complying with them. Where a third-party license grants rights that this license does not, those rights apply only to the relevant third-party material.
+
+6. Termination
+
+Your permissions terminate automatically if you violate this license. The Copyright Holder may also terminate your permissions by written notice. Upon termination, you must stop using the Software and delete copies in your possession or control, except where retention is required by law.
+
+7. No warranty and limitation of liability
+
+THE SOFTWARE IS PROVIDED "AS IS" AND WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, TO THE MAXIMUM EXTENT PERMITTED BY LAW. THE COPYRIGHT HOLDER SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, CONSEQUENTIAL, OR OTHER DAMAGES ARISING FROM OR RELATED TO THE SOFTWARE OR ITS USE.
+
+8. Governing law
+
+This license is governed by the laws applicable to the Copyright Holder, without regard to conflict-of-law rules. If any provision is held unenforceable, it shall be narrowed to the minimum extent necessary and the remaining provisions shall remain in effect.
+
+9. Written permission
+
+Written permissions or exceptions must be signed or issued by the Copyright Holder and must identify the specific use, version, and duration permitted. An issue comment, pull request, or public discussion does not by itself grant an exception.
+
+For permissions not granted here, contact the Copyright Holder through the contact details published in the repository.

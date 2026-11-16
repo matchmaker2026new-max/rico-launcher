@@ -1,0 +1,715 @@
+//! Instances tab: grid of instances, per-instance pages (mods, browse,
+//! settings), the create dialog and the icon picker.
+
+mod browse;
+mod clashes;
+mod create;
+mod detail;
+mod icon_picker;
+mod loader_switch;
+mod modpacks;
+mod mods_page;
+mod packs;
+mod preview;
+mod recommended;
+mod replays;
+pub mod retarget;
+mod trash;
+mod worlds;
+
+use std::collections::{HashMap, HashSet};
+
+use arctic_core::instances::{self, Instance};
+use arctic_core::loaders::{LoaderKind, LoaderVersion};
+use arctic_core::mods::{SearchPage, SortBy};
+use eframe::egui::{self, Align2, FontId, RichText, vec2};
+
+pub use create::CreateForm;
+pub(crate) use detail::dialog_frame;
+
+use crate::app::{ArcticApp, Tab};
+use crate::art::icons::Icon;
+use crate::tasks::{Event, ProgressSnapshot};
+use crate::toasts::Kind;
+use crate::widgets;
+
+const CARD: [f32; 2] = [260.0, 104.0];
+
+/// Something fetched in the background.
+#[derive(Debug, Clone)]
+pub enum Load<T> {
+    Loading,
+    Ready(T),
+    Failed(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IconState {
+    Loading,
+    /// Registered with egui under this URI.
+    Ready(String),
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum InstancePage {
+    #[default]
+    Mods,
+    Browse,
+    Packs,
+    Worlds,
+    Replays,
+    Settings,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ModsRootView {
+    #[default]
+    Installed,
+    Library,
+    Browse,
+}
+
+#[derive(Default)]
+pub struct SearchState {
+    pub text: String,
+    pub sort: SortBy,
+    /// Id of the newest request; older responses are dropped.
+    pub request: u64,
+    pub loading: bool,
+    pub results: Option<Result<SearchPage, String>>,
+    /// Where the page being fetched starts (0: a new search, which replaces the results; more:
+    /// the next page, added to them).
+    pub more_from: usize,
+    /// Instance the results were fetched for.
+    pub instance: Option<String>,
+    /// When the search text last changed (search runs shortly after typing stops).
+    pub typed_at: Option<f64>,
+}
+
+/// Under a result list: when its end scrolls into view and there are more, the next page is
+/// asked for. Returns where it starts, if it's time.
+pub(super) fn more_on_scroll(
+    ui: &mut egui::Ui,
+    p: &crate::theme::Palette,
+    search: &SearchState,
+) -> Option<usize> {
+    let Some(Ok(page)) = &search.results else {
+        return None;
+    };
+    let shown = page.hits.len();
+    if shown == 0 || shown >= page.total {
+        return None;
+    }
+    let end = ui
+        .horizontal(|ui| {
+            ui.spinner();
+            ui.label(egui::RichText::new(crate::i18n::current("Loading more…")).color(p.muted));
+        })
+        .response;
+    (!search.loading && ui.is_rect_visible(end.rect)).then_some(shown)
+}
+
+/// Stable, unique egui texture URI for a remote icon URL.
+fn icon_texture_uri(url: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    url.hash(&mut hasher);
+    format!("bytes://modicon/{:016x}", hasher.finish())
+}
+
+/// All Instances-tab UI state.
+#[derive(Default)]
+pub struct InstancesUi {
+    pub preview: Option<preview::Preview>,
+    /// Instance whose page is open (`None` = the grid).
+    pub open: Option<String>,
+    pub page: InstancePage,
+    pub create: Option<CreateForm>,
+    pub confirm_delete: bool,
+    /// crate::i18n::current("Duplicate instance"): copy the worlds too, and a copy is being made.
+    pub dup_worlds: bool,
+    pub duplicating: bool,
+    pub rename: Option<String>,
+    /// Cached lists and background checks, retained when switching instances.
+    pub(crate) mod_scans: HashMap<String, crate::mod_tasks::ModScan>,
+    /// Installed-mod filter, kept separate from the Modrinth search.
+    pub mod_filter: (String, String),
+    /// Instance and subpage selected by the top-level Mods tab.
+    pub mods_root_instance: Option<String>,
+    pub mods_root_view: ModsRootView,
+    /// Mods that won't start together, and a Play they stopped.
+    pub clashes: clashes::ClashState,
+    pub search: SearchState,
+    pub installing: HashSet<String>,
+    /// Where each instance's mod update check stands.
+    pub mod_updates: HashMap<String, mods_page::UpdateState>,
+    pub install_progress: Option<ProgressSnapshot>,
+    pub icons: HashMap<String, IconState>,
+    pub loader_games: HashMap<LoaderKind, Load<HashSet<String>>>,
+    pub loader_versions: HashMap<(LoaderKind, String), Load<Vec<LoaderVersion>>>,
+    /// Worlds of the open instance.
+    pub worlds: Option<(String, Vec<arctic_core::worlds::World>)>,
+    pub worlds_busy: bool,
+    /// Replays of the open instance.
+    pub replays: Option<(String, Vec<arctic_core::replays::Replay>)>,
+    pub import: Option<worlds::ImportDialog>,
+    /// The modpack browser is open (instead of the grid).
+    pub modpacks_open: bool,
+    /// The trash dialog (removed instances).
+    pub trash: trash::TrashUi,
+    /// Project being installed ("" for an imported file).
+    pub pack_installing: Option<String>,
+    /// The modpack whose version list is open in the browser.
+    pub pack_choosing: Option<String>,
+    /// Versions of the modpacks looked at, by project id.
+    pub pack_versions: HashMap<String, Load<Vec<arctic_core::mods::modpack::PackVersion>>>,
+    /// Resource packs and shaders page.
+    pub packs: packs::PacksUi,
+    /// Moving the open instance to another Minecraft version.
+    pub retarget: Option<retarget::RetargetUi>,
+    /// Moving the open instance to another mod loader.
+    pub loader_switch: Option<loader_switch::LoaderUi>,
+}
+
+impl InstancesUi {
+    /// Dismiss the innermost open view before leaving the Instances tab.
+    pub(crate) fn go_back(&mut self) -> bool {
+        if self.preview.take().is_some() {
+            return true;
+        }
+        if self.modpacks_open {
+            self.modpacks_open = false;
+            return true;
+        }
+        self.open.take().is_some()
+    }
+}
+
+impl ArcticApp {
+    pub(crate) fn instance_by_id(&self, id: &str) -> Option<&Instance> {
+        if id == self.instance.id {
+            return Some(&self.instance);
+        }
+        self.custom_instances.iter().find(|i| i.id == id)
+    }
+
+    pub(crate) fn instance_mut(&mut self, id: &str) -> Option<&mut Instance> {
+        if id == self.instance.id {
+            return Some(&mut self.instance);
+        }
+        self.custom_instances.iter_mut().find(|i| i.id == id)
+    }
+
+    /// Instance chosen on the Play tab (falls back to Vanilla).
+    pub(crate) fn selected_instance(&self) -> &Instance {
+        self.settings
+            .last_instance
+            .as_deref()
+            .and_then(|id| self.custom_instances.iter().find(|i| i.id == id))
+            .unwrap_or(&self.instance)
+    }
+
+    /// "Fabric 0.16.9 · Minecraft 1.21.4" / "Plays any release".
+    pub(crate) fn instance_subtitle(instance: &Instance) -> String {
+        match (&instance.version, instance.loader.version()) {
+            (Some(game), Some(loader)) => {
+                format!("{} {loader} · Minecraft {game}", instance.loader.label())
+            }
+            (Some(game), None) => format!("Minecraft {game}"),
+            (None, _) => "Plays any release".to_owned(),
+        }
+    }
+
+    pub(crate) fn reload_instances(&mut self) {
+        self.custom_instances = instances::list_custom(&self.dirs).unwrap_or_default();
+    }
+
+    pub(crate) fn instances_tab(&mut self, ui: &mut egui::Ui) {
+        if self.inst.modpacks_open {
+            self.modpacks_page(ui);
+            return;
+        }
+        if let Some(id) = self.inst.open.clone() {
+            if self.instance_by_id(&id).is_some() {
+                self.instance_page(ui, &id);
+                return;
+            }
+            self.inst.open = None;
+        }
+        self.instances_grid(ui);
+    }
+
+    /// The sidebar's Mods page: manage the selected instance without first opening Instances.
+    pub(crate) fn mods_tab(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette();
+        widgets::page_header(
+            ui,
+            p,
+            crate::i18n::current("Mods"),
+            crate::i18n::current("Browse and manage mods for your Minecraft instances."),
+        );
+
+        let mut instances = vec![self.instance.clone()];
+        instances.extend(self.custom_instances.iter().cloned());
+        let fallback = self.selected_instance().id.clone();
+        let mut selected = self
+            .inst
+            .mods_root_instance
+            .clone()
+            .filter(|id| self.instance_by_id(id).is_some())
+            .unwrap_or(fallback);
+        let selected_name = self
+            .instance_by_id(&selected)
+            .map(|i| format!("{} · {}", i.name, Self::instance_subtitle(i)))
+            .unwrap_or_else(|| crate::i18n::current("Choose an instance").to_owned());
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(crate::i18n::current("Instance")).color(p.muted));
+            egui::ComboBox::from_id_salt("mods_root_instance")
+                .selected_text(selected_name)
+                .show_ui(ui, |ui| {
+                    for instance in &instances {
+                        ui.selectable_value(
+                            &mut selected,
+                            instance.id.clone(),
+                            format!("{} · {}", instance.name, Self::instance_subtitle(instance)),
+                        );
+                    }
+                });
+        });
+        self.inst.mods_root_instance = Some(selected.clone());
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            ui.selectable_value(
+                &mut self.inst.mods_root_view,
+                ModsRootView::Installed,
+                crate::i18n::current("Installed"),
+            );
+            ui.selectable_value(
+                &mut self.inst.mods_root_view,
+                ModsRootView::Library,
+                crate::i18n::current("RICO Library"),
+            );
+            ui.selectable_value(
+                &mut self.inst.mods_root_view,
+                ModsRootView::Browse,
+                crate::i18n::current("Browse Modrinth"),
+            );
+        });
+        ui.add_space(8.0);
+
+        let Some(instance) = self.instance_by_id(&selected).cloned() else {
+            return;
+        };
+        if instance.loader.kind().is_none() {
+            crate::theme::card(p).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.label(RichText::new(crate::i18n::current("This instance has no mod loader")).size(17.0).strong().color(p.text));
+                ui.label(
+                    RichText::new(crate::i18n::current("Choose a Fabric, Quilt, Forge or NeoForge instance to install and manage mods."))
+                        .color(p.muted),
+                );
+                if widgets::button(ui, p, Some(Icon::Plus), crate::i18n::current("Create a modded instance"), true).clicked() {
+                    let now = ui.input(|i| i.time);
+                    self.set_tab(Tab::Instances, now);
+                    self.open_create_dialog();
+                }
+            });
+            return;
+        }
+
+        self.check_mods(&instance.id, false);
+        ui.ctx()
+            .request_repaint_after(crate::mod_tasks::POLL_INTERVAL);
+        match self.inst.mods_root_view {
+            ModsRootView::Installed => self.mods_page(ui, &instance),
+            ModsRootView::Library => self.recommended_mods_page(ui, &instance),
+            ModsRootView::Browse => self.browse_page(ui, &instance),
+        }
+    }
+
+    /// A modpack file dropped anywhere on the Instances page installs it.
+    fn take_dropped_modpack(&mut self, ui: &egui::Ui) {
+        let dropped: Option<std::path::PathBuf> = ui.input(|i| {
+            i.raw
+                .dropped_files
+                .iter()
+                .map(|f| f.path().to_path_buf())
+                .find(|p| {
+                    p.extension().is_some_and(|e| {
+                        e.eq_ignore_ascii_case("mrpack")
+                            || (e.eq_ignore_ascii_case("zip")
+                                && arctic_core::mods::modpack::is_modrinth_pack(p))
+                    })
+                })
+        });
+        if let Some(path) = dropped
+            && self.inst.pack_installing.is_none()
+        {
+            self.inst.pack_installing = Some(String::new());
+            self.tasks.install_modpack_file(Some(path));
+            self.inst.modpacks_open = true;
+        }
+    }
+
+    /// Modpacks, up front: finding them under a small button isn't obvious.
+    fn modpacks_banner(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette();
+        ui.add_space(6.0);
+        crate::theme::card(p).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            crate::widgets::row(ui, |ui| {
+                ui.vertical(|ui| {
+                    ui.label(RichText::new(crate::i18n::current("Modpacks")).size(16.0).strong().color(p.text));
+                    ui.label(
+                        RichText::new(
+                            crate::i18n::current("Install a whole modpack from Modrinth in one click, or drop a .mrpack file anywhere on this page."),
+                        )
+                        .color(p.muted),
+                    );
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if widgets::button(ui, p, Some(Icon::Layers), crate::i18n::current("Browse modpacks"), true).clicked() {
+                        self.inst.modpacks_open = true;
+                    }
+                });
+            });
+        });
+        ui.add_space(10.0);
+    }
+
+    fn instances_grid(&mut self, ui: &mut egui::Ui) {
+        self.take_dropped_modpack(ui);
+        let ctx = ui.ctx().clone();
+        self.trash_dialog(&ctx);
+        let p = self.palette();
+        crate::widgets::row(ui, |ui| {
+            ui.vertical(|ui| {
+                widgets::page_header(
+                    ui,
+                    p,
+                    "Instances",
+                    "Separate game folders, each with its own version, mods and snowflake.",
+                );
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                if widgets::button(ui, p, Some(Icon::Plus), crate::i18n::current("New instance"), true).clicked() {
+                    self.open_create_dialog();
+                }
+                if widgets::button(ui, p, Some(Icon::Layers), crate::i18n::current("Modpacks"), false).clicked() {
+                    self.inst.modpacks_open = true;
+                }
+                if widgets::button(ui, p, Some(Icon::Layers), "From another launcher", false)
+                    .on_hover_text(crate::i18n::current("Bring instances, worlds and HUD setups over from TLauncher, CurseForge, Prism, Lunar…"))
+                    .clicked()
+                {
+                    self.open_migrate();
+                }
+                if widgets::button(ui, p, Some(Icon::Import), "Import", false)
+                    .on_hover_text(crate::i18n::current("Add an instance, HUD layout or crosshair someone shared"))
+                    .clicked()
+                {
+                    self.open_share_import();
+                }
+                // Removed instances can come back: easy to find, not only in a folder.
+                let removed = self.trash_count();
+                if removed > 0
+                    && widgets::button(ui, p, Some(Icon::Trash), &format!("Trash ({removed})"), false)
+                        .on_hover_text(crate::i18n::current("Removed instances, to bring back or delete for good"))
+                        .clicked()
+                {
+                    self.open_trash();
+                }
+            });
+        });
+        self.modpacks_banner(ui);
+        let mut all = vec![self.instance.clone()];
+        all.extend(self.custom_instances.iter().cloned());
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(14.0, 14.0);
+            for instance in &all {
+                if self.instance_card(ui, instance) {
+                    self.open_instance(&instance.id);
+                }
+            }
+        });
+        if self.custom_instances.is_empty() {
+            ui.add_space(18.0);
+            ui.label(
+                RichText::new(
+                    "Create a Fabric, Quilt, NeoForge or Forge instance to play with mods.",
+                )
+                .color(p.muted),
+            );
+        }
+    }
+
+    /// Returns true when clicked.
+    fn instance_card(&mut self, ui: &mut egui::Ui, instance: &Instance) -> bool {
+        let p = self.palette();
+        let selected = self.selected_instance().id == instance.id;
+        let (rect, response, _) = widgets::hover_card(ui, p, CARD.into(), selected);
+        let emblem_rect =
+            egui::Rect::from_min_size(rect.left_top() + vec2(16.0, 22.0), vec2(58.0, 58.0));
+        let emblem = widgets::emblem_at(
+            ui,
+            p,
+            &instance.icon,
+            emblem_rect,
+            response.id.with("emblem"),
+        );
+        self.icon_picker(&emblem, &instance.id);
+        let text_x = emblem_rect.right() + 14.0;
+        let text_w = rect.right() - text_x - 12.0;
+        widgets::text_elided(
+            ui.painter(),
+            egui::pos2(text_x, rect.top() + 36.0),
+            &instance.name,
+            FontId::proportional(16.5),
+            p.text,
+            text_w,
+        );
+        widgets::text_elided(
+            ui.painter(),
+            egui::pos2(text_x, rect.top() + 60.0),
+            &Self::instance_subtitle(instance),
+            FontId::proportional(12.0),
+            p.muted,
+            text_w,
+        );
+        if selected {
+            ui.painter().text(
+                egui::pos2(text_x, rect.top() + 80.0),
+                Align2::LEFT_CENTER,
+                "Selected on Play",
+                FontId::proportional(11.0),
+                p.accent,
+            );
+        }
+        response.clicked() && !emblem.clicked()
+    }
+
+    pub(crate) fn open_instance(&mut self, id: &str) {
+        self.inst.open = Some(id.to_owned());
+        self.inst.page = if self
+            .instance_by_id(id)
+            .is_some_and(|i| i.loader.kind().is_some())
+        {
+            InstancePage::Mods
+        } else {
+            InstancePage::Worlds
+        };
+        self.inst.worlds = None;
+        self.inst.import = None;
+        self.inst.confirm_delete = false;
+        self.inst.rename = None;
+        self.check_mods(id, false);
+    }
+
+    /// Re-read after a local edit; coalesced if a scan is already running.
+    pub(crate) fn refresh_mods(&mut self, id: &str) {
+        self.check_mods(id, true);
+    }
+
+    /// Opening and drawing a page only schedules work, never reads its JARs.
+    pub(super) fn check_mods(&mut self, id: &str, force: bool) {
+        let Some(instance) = self.instance_by_id(id) else {
+            return;
+        };
+        let key = crate::mod_tasks::ScanKey::new(instance, &self.dirs);
+        let state = self.inst.mod_scans.entry(id.to_owned()).or_default();
+        if let Some((request, previous)) = state.begin(key.clone(), force) {
+            self.tasks.scan_mods(id.to_owned(), request, key, previous);
+        }
+    }
+
+    /// Texture URI for an icon URL, fetching it on first use.
+    pub(crate) fn icon_uri(&mut self, url: &str) -> Option<String> {
+        match self.inst.icons.get(url) {
+            Some(IconState::Ready(uri)) => Some(uri.clone()),
+            Some(_) => None,
+            None => {
+                self.inst.icons.insert(url.to_owned(), IconState::Loading);
+                self.tasks.mod_icon(url.to_owned());
+                None
+            }
+        }
+    }
+
+    /// Background results for this module.
+    pub(crate) fn on_instances_event(&mut self, event: Event, ctx: &egui::Context) {
+        match event {
+            Event::ModsScanned(id, request, result) => {
+                if self
+                    .inst
+                    .mod_scans
+                    .get_mut(&id)
+                    .is_some_and(|state| state.complete(request, result))
+                {
+                    self.refresh_mods(&id);
+                }
+            }
+            Event::LocalModsImported(id, result) => match result {
+                Ok(Some(summary)) if !summary.added.is_empty() => {
+                    let count = summary.added.len();
+                    let detail = if summary.skipped.is_empty() {
+                        String::new()
+                    } else {
+                        format!("Skipped: {}", summary.skipped.join("; "))
+                    };
+                    self.toasts.push(
+                        Kind::Success,
+                        format!("Added {count} mod{}", if count == 1 { "" } else { "s" }),
+                        detail,
+                    );
+                    self.refresh_mods(&id);
+                }
+                Ok(Some(summary)) if !summary.skipped.is_empty() => {
+                    self.toasts
+                        .push(Kind::Info, "No new mods added", summary.skipped.join("; "))
+                }
+                Ok(Some(_)) | Ok(None) => {}
+                Err(error) => self
+                    .toasts
+                    .push(Kind::Error, "Could not import mods", error),
+            },
+            Event::LoaderGames(kind, result) => {
+                let state = match result {
+                    Ok(list) => Load::Ready(list.into_iter().collect()),
+                    Err(e) => Load::Failed(e),
+                };
+                self.inst.loader_games.insert(kind, state);
+                self.create_form_defaults();
+            }
+            Event::PackVersions(project, result) => {
+                let state = match result {
+                    Ok(list) => Load::Ready(list),
+                    Err(e) => Load::Failed(e),
+                };
+                self.inst.pack_versions.insert(project, state);
+            }
+            Event::LoaderVersions(kind, game, result) => {
+                let state = match result {
+                    Ok(list) => Load::Ready(list),
+                    Err(e) => Load::Failed(e),
+                };
+                self.inst.loader_versions.insert((kind, game), state);
+                self.create_form_defaults();
+            }
+            Event::ModSearch(request, result) => {
+                if let Ok(page) = &result {
+                    for hit in &page.hits {
+                        crate::fonts::ensure_for(
+                            ctx,
+                            &format!("{}{}{}", hit.title, hit.description, hit.author),
+                        );
+                    }
+                }
+                if request == self.inst.search.request {
+                    let search = &mut self.inst.search;
+                    search.loading = false;
+                    let more = std::mem::take(&mut search.more_from) > 0;
+                    match (more, &mut search.results, result) {
+                        // The next page: added (a project already listed isn't listed twice).
+                        (true, Some(Ok(shown)), Ok(page)) => {
+                            for hit in page.hits {
+                                if !shown.hits.iter().any(|h| h.project_id == hit.project_id) {
+                                    shown.hits.push(hit);
+                                }
+                            }
+                            shown.total = page.total;
+                        }
+                        // A next page that failed leaves what's shown; it's tried again on scrolling.
+                        (true, Some(Ok(_)), Err(e)) => log::warn!("loading more results: {e}"),
+                        (_, results, result) => *results = Some(result),
+                    }
+                }
+            }
+            Event::ModProgress(p) => self.inst.install_progress = Some(p),
+            Event::ModUpdatesChecked(instance, result) => {
+                let state = match result {
+                    Ok(list) => mods_page::UpdateState::Ready(list),
+                    Err(e) => mods_page::UpdateState::Failed(e),
+                };
+                self.inst.mod_updates.insert(instance, state);
+            }
+            Event::ModUpdatesApplied(instance, result) => {
+                self.inst.mod_updates.remove(&instance);
+                self.inst.install_progress = None;
+                match result {
+                    Ok((installed, failed)) => {
+                        let note = if failed.is_empty() {
+                            String::new()
+                        } else {
+                            crate::tr_format!("{} could not be updated.", failed.len())
+                        };
+                        self.toasts.push(
+                            Kind::Success,
+                            format!(
+                                "Updated {installed} file{}",
+                                if installed == 1 { "" } else { "s" }
+                            ),
+                            note,
+                        );
+                    }
+                    Err(e) => self.toasts.push(Kind::Error, "Could not update mods", e),
+                }
+                if self.inst.open.as_deref() == Some(instance.as_str()) {
+                    self.refresh_mods(&instance);
+                }
+            }
+            Event::RetargetChecked(instance, version, result) => {
+                self.on_retarget_checked(instance, version, result)
+            }
+            Event::Retargeted(instance, version, result) => {
+                self.on_retargeted(instance, version, result)
+            }
+            Event::LoaderChecked(instance, loader, result) => {
+                self.on_loader_checked(instance, loader, result)
+            }
+            Event::LoaderSwitched(instance, loader, result) => {
+                self.on_loader_switched(instance, loader, result)
+            }
+            Event::ModInstalled(instance_id, project_id, result) => {
+                self.inst.installing.remove(&project_id);
+                if self.inst.installing.is_empty() {
+                    self.inst.install_progress = None;
+                }
+                match result {
+                    Ok(installed) => {
+                        let names: Vec<&str> = installed.iter().map(|m| m.title.as_str()).collect();
+                        let title = match names.split_first() {
+                            Some((first, [])) => format!("Installed {first}"),
+                            Some((first, rest)) => {
+                                format!("Installed {first} + {} dependencies", rest.len())
+                            }
+                            None => "Already installed".to_owned(),
+                        };
+                        self.toasts.push(Kind::Success, title, "");
+                    }
+                    Err(e) => self.toasts.push(Kind::Error, "Could not install mod", e),
+                }
+                if self.inst.open.as_deref() == Some(instance_id.as_str()) {
+                    self.refresh_mods(&instance_id);
+                }
+            }
+            Event::ModGalleryImage(url, result) => {
+                if let Some(preview) = &mut self.inst.preview {
+                    preview.gallery_result(url, result);
+                }
+            }
+            Event::ModIcon(url, result) => {
+                let state = match result {
+                    Ok(bytes) => {
+                        let uri = icon_texture_uri(&url);
+                        ctx.include_bytes(uri.clone(), bytes);
+                        IconState::Ready(uri)
+                    }
+                    Err(_) => IconState::Failed,
+                };
+                self.inst.icons.insert(url, state);
+            }
+            _ => {}
+        }
+    }
+}
