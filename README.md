@@ -7,12 +7,7 @@
   The client adds 128 built-in mods, including 53 HUD widgets, plus Polarium, replays, cosmetics and voice.
 </p>
 
-<p align="center">
-  <video controls muted playsinline preload="metadata" width="900">
-    <source src="https://github.com/matchmaker2026new-max/rico-launcher/raw/refs/heads/main/docs/rico-launcher-promo.mp4" type="video/mp4">
-    <a href="https://github.com/matchmaker2026new-max/rico-launcher/blob/main/docs/rico-launcher-promo.mp4">شاهد فيديو RICO</a>
-  </video>
-</p>
+
 
 <p align="center">
   The RICO Client adds quality-of-life features and cosmetics, not cheats.
@@ -25,6 +20,13 @@
 </p>
 
 
+
+<p align="center">
+  <video controls muted playsinline preload="metadata" width="900">
+    <source src="https://github.com/matchmaker2026new-max/rico-launcher/raw/refs/heads/main/docs/rico-launcher-promo.mp4" type="video/mp4">
+  </video><br>
+  <a href="https://github.com/matchmaker2026new-max/rico-launcher/blob/main/docs/rico-launcher-promo.mp4"><strong>▶ مشاهدة فيديو RICO</strong></a>
+</p>
 
 ## Why RICO
 
