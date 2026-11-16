@@ -1,5 +1,3 @@
-<p align="center">
-</p>
 
 <h1 align="center">RICO</h1>
 
@@ -10,28 +8,23 @@
 </p>
 
 <p align="center">
+  <video controls muted playsinline preload="metadata" width="900">
+    <source src="https://github.com/matchmaker2026new-max/rico-launcher/raw/refs/heads/main/docs/rico-launcher-promo.mp4" type="video/mp4">
+    <a href="https://github.com/matchmaker2026new-max/rico-launcher/blob/main/docs/rico-launcher-promo.mp4">شاهد فيديو RICO</a>
+  </video>
+</p>
+
+<p align="center">
   The RICO Client adds quality-of-life features and cosmetics, not cheats.
 </p>
 
-<p align="center">
-  <a href="https://github.com/matchmaker2026new-max/rico-launcher/releases/latest">
-</a>
-  <a href="https://github.com/matchmaker2026new-max/rico-launcher/actions/workflows/ci.yml">
-</a>
-  <a href="LICENSE">
-</a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/matchmaker2026new-max/rico-launcher/releases/latest"><b>Download</b></a> ·
-  <a href="https://github.com/matchmaker2026new-max/rico-launcher">Website</a> ·
-  <a href="docs/cli.md">Command line</a> ·
-  <a href="mailto:support@github.com/matchmaker2026new-max/rico-launcher">Support</a>
-</p>
 
 
 <p align="center">
+  <a href="https://rico-launcher.lovable.app/">الموقع الرسمي لـRICO</a>
 </p>
+
+
 
 ## Why RICO
 
@@ -233,8 +226,6 @@ Yes, both of you need RICO, the same Minecraft version and the same mods.
 No. RICO is an independent project, not approved by or associated with Mojang
 or Microsoft.
 
-<p align="center">
-</p>
 
 ## Building from source
 
